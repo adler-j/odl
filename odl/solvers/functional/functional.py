@@ -529,7 +529,7 @@ class FunctionalRightScalarMult(Functional, OperatorRightScalarMult):
         --------
         proximal_arg_scaling
         """
-        return proximal_arg_scaling(self.functional.proximal, self.scalar)
+        return proximal_arg_scaling(self.functional, self.scalar)
 
 
 class FunctionalComp(Functional, OperatorComp):
@@ -874,7 +874,7 @@ class FunctionalLinearPerturb(Functional):
 proximal_quadratic_perturbation
         """
         return proximal_quadratic_perturbation(
-            self.functional.proximal, a=0, u=self.linear_term)
+                self.functional, a=0, u=self.linear_term)
 
     @property
     def convex_conj(self):

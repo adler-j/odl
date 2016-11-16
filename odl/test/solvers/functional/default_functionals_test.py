@@ -54,15 +54,6 @@ def space(request, fn_impl):
         return odl.uniform_discr(0, 1, 7, impl=fn_impl)
 
 
-sigma_params = [0.001, 2.7, np.array(0.5), 10]
-sigma_ids = [' sigma={} '.format(s) for s in sigma_params]
-
-
-@pytest.fixture(scope='module', params=sigma_params, ids=sigma_ids)
-def sigma(request):
-    return request.param
-
-
 exponent_params = [1, 2, 1.5, 2.5, -1.6]
 exponent_ids = [' exponent={} '.format(s) for s in exponent_params]
 
@@ -75,9 +66,8 @@ def exponent(request):
 # --- functional tests --- #
 
 
-def test_L1_norm(space, sigma):
+def test_L1_norm(space):
     """Test the L1-norm."""
-    sigma = float(sigma)
     func = odl.solvers.L1Norm(space)
     x = noise_element(space)
 
@@ -90,15 +80,15 @@ def test_L1_norm(space, sigma):
     assert all_almost_equal(func.gradient(x), expected_result)
 
     # Test proximal - expecting the following:
-    #                            |  x_i + sigma, if x_i < -sigma
-    #                      z_i = {  0,           if -sigma <= x_i <= sigma
-    #                            |  x_i - sigma, if x_i > sigma
+    #                            |  x_i + 1, if x_i < -1
+    #                      z_i = {  0,           if -1 <= x_i <= 1
+    #                            |  x_i - 1, if x_i > 1
     tmp = np.zeros(space.size)
     orig = x.asarray()
-    tmp[orig > sigma] = orig[orig > sigma] - sigma
-    tmp[orig < -sigma] = orig[orig < -sigma] + sigma
+    tmp[orig > 1] = orig[orig > 1] - 1
+    tmp[orig < -1] = orig[orig < -1] + 1
     expected_result = space.element(tmp)
-    assert all_almost_equal(func.proximal(sigma)(x), expected_result)
+    assert all_almost_equal(func.proximal(x), expected_result)
 
     # Test convex conjugate - expecting 0 if |x|_inf <= 1, infty else
     func_cc = func.convex_conj
@@ -117,14 +107,14 @@ def test_L1_norm(space, sigma):
 
     # Test proximal of the convex conjugate - expecting x / max(1, |x|)
     expected_result = x / np.maximum(1, np.abs(x))
-    assert all_almost_equal(func_cc.proximal(sigma)(x), expected_result)
+    assert all_almost_equal(func_cc.proximal(x), expected_result)
 
     # Verify that the biconjugate is the functional itself
     func_cc_cc = func_cc.convex_conj
     assert isinstance(func_cc_cc, odl.solvers.L1Norm)
 
 
-def test_indicator_lp_unit_ball(space, sigma, exponent):
+def test_indicator_lp_unit_ball(space, exponent):
     """Test for indicator function on unit ball."""
     x = noise_element(space)
     one_elem = space.one()
@@ -142,7 +132,7 @@ def test_indicator_lp_unit_ball(space, sigma, exponent):
     assert func(norm_less_than_one) == 0
 
 
-def test_L2_norm(space, sigma):
+def test_L2_norm(space):
     """Test the L2-norm."""
     func = odl.solvers.L2Norm(space)
     x = noise_element(space)
@@ -162,15 +152,15 @@ def test_L2_norm(space, sigma):
         func.gradient(func.domain.zero())
 
     # Test proximal operator - expecting
-    # x * (1 - sigma/||x||) if ||x|| > sigma, 0 else
-    norm_less_than_sigma = 0.99 * sigma * x / x_norm
-    assert all_almost_equal(func.proximal(sigma)(norm_less_than_sigma),
+    # x * (1 - 1/||x||) if ||x|| > 1, 0 else
+    norm_less_than_one = 0.99 * x / x_norm
+    assert all_almost_equal(func.proximal(norm_less_than_one),
                             space.zero())
 
-    norm_larger_than_sigma = 1.01 * sigma * x / x_norm
-    expected_result = (norm_larger_than_sigma *
-                       (1.0 - sigma / norm_larger_than_sigma.norm()))
-    assert all_almost_equal(func.proximal(sigma)(norm_larger_than_sigma),
+    norm_larger_than_one = 1.01 * x / x_norm
+    expected_result = (norm_larger_than_one *
+                       (1.0 - 1 / norm_larger_than_one.norm()))
+    assert all_almost_equal(func.proximal(norm_larger_than_one),
                             expected_result)
 
     # Test convex conjugate
@@ -194,14 +184,14 @@ def test_L2_norm(space, sigma):
         expected_result = x
     else:
         expected_result = x / x_norm
-    assert all_almost_equal(func_cc.proximal(sigma)(x), expected_result)
+    assert all_almost_equal(func_cc.proximal(x), expected_result)
 
     # Verify that the biconjugate is the functional itself
     func_cc_cc = func_cc.convex_conj
     assert almost_equal(func_cc_cc(x), func(x))
 
 
-def test_L2_norm_squared(space, sigma):
+def test_L2_norm_squared(space):
     """Test the squared L2-norm."""
     func = odl.solvers.L2NormSquared(space)
     x = noise_element(space)
@@ -216,8 +206,8 @@ def test_L2_norm_squared(space, sigma):
     assert all_almost_equal(func.gradient(x), expected_result)
 
     # Test proximal operator
-    expected_result = x / (1 + 2.0 * sigma)
-    assert all_almost_equal(func.proximal(sigma)(x), expected_result)
+    expected_result = x / 3.0
+    assert all_almost_equal(func.proximal(x), expected_result)
 
     # Test convex conjugate
     func_cc = func.convex_conj
@@ -231,8 +221,8 @@ def test_L2_norm_squared(space, sigma):
     assert all_almost_equal(func_cc.gradient(x), expected_result)
 
     # Test proximal of the convex conjugate
-    expected_result = x / (1 + sigma / 2.0)
-    assert all_almost_equal(func_cc.proximal(sigma)(x), expected_result)
+    expected_result = x / 1.5
+    assert all_almost_equal(func_cc.proximal(x), expected_result)
 
     # Verify that the biconjugate is the functional itself
     func_cc_cc = func_cc.convex_conj
@@ -259,8 +249,7 @@ def test_constant_functional(space, scalar):
     assert isinstance(func.gradient, odl.ZeroOperator)
 
     # Test proximal operator - expecting identity
-    sigma = 1.5
-    assert isinstance(func.proximal(sigma), odl.IdentityOperator)
+    assert isinstance(func.proximal, odl.IdentityOperator)
 
     # Test convex conjugate
     func_cc = func.convex_conj
@@ -275,7 +264,7 @@ def test_constant_functional(space, scalar):
         func_cc.gradient
 
     # Proximal of the convex conjugate - expecting zero operator
-    assert isinstance(func_cc.proximal(sigma), odl.ZeroOperator)
+    assert isinstance(func_cc.proximal, odl.ZeroOperator)
 
     # Verify that the biconjugate is the functional itself
     func_cc_cc = func_cc.convex_conj
@@ -321,10 +310,8 @@ def test_kullback_leibler(space):
     assert all_almost_equal(func.gradient(x), expected_result)
 
     # The proximal operator
-    sigma = np.random.rand()
-    expected_result = odl.solvers.proximal_cconj(
-        odl.solvers.proximal_cconj_kl(space, g=prior))(sigma)(x)
-    assert all_almost_equal(func.proximal(sigma)(x), expected_result)
+    expected_result = odl.solvers.proximal_cconj(func.convex_conj)(x)
+    assert all_almost_equal(func.proximal(x), expected_result)
 
     # The convex conjugate functional
     cc_func = func.convex_conj
@@ -349,8 +336,8 @@ def test_kullback_leibler(space):
     assert all_almost_equal(cc_func.gradient(x), expected_result)
 
     # The proximal of the convex conjugate
-    expected_result = 0.5 * (1 + x - np.sqrt((x - 1)**2 + 4 * sigma * prior))
-    assert all_almost_equal(cc_func.proximal(sigma)(x), expected_result)
+    expected_result = 0.5 * (1 + x - np.sqrt((x - 1)**2 + 4 * prior))
+    assert all_almost_equal(cc_func.proximal(x), expected_result)
 
     # The biconjugate, which is the functional itself since it is proper,
     # convex and lower-semicontinuous
@@ -391,10 +378,8 @@ def test_kullback_leibler_cross_entorpy(space):
     assert all_almost_equal(func.gradient(x), expected_result)
 
     # The proximal operator
-    sigma = np.random.rand()
-    expected_result = odl.solvers.proximal_cconj(
-        odl.solvers.proximal_cconj_kl_cross_entropy(space, g=prior))(sigma)(x)
-    assert all_almost_equal(func.proximal(sigma)(x), expected_result)
+    expected_result = odl.solvers.proximal_cconj(func.convex_conj)(x)
+    assert all_almost_equal(func.proximal(x), expected_result)
 
     # The convex conjugate functional
     cc_func = func.convex_conj
@@ -413,8 +398,8 @@ def test_kullback_leibler_cross_entorpy(space):
     assert all_almost_equal(cc_func.gradient(x), expected_result)
 
     # The proximal of the convex conjugate
-    expected_result = x - scipy.special.lambertw(sigma * prior * np.exp(x))
-    assert all_almost_equal(cc_func.proximal(sigma)(x), expected_result)
+    expected_result = x - scipy.special.lambertw(prior * np.exp(x))
+    assert all_almost_equal(cc_func.proximal(x), expected_result)
 
     # The biconjugate, which is the functional itself since it is proper,
     # convex and lower-semicontinuous
@@ -481,10 +466,9 @@ def test_separable_sum(space):
     assert grad[1] == l2.gradient(y)
 
     # Proximal
-    sigma = 1.0
-    prox = func.proximal(sigma)([x, y])
-    assert prox[0] == l1.proximal(sigma)(x)
-    assert prox[1] == l2.proximal(sigma)(y)
+    prox = func.proximal([x, y])
+    assert prox[0] == l1.proximal(x)
+    assert prox[1] == l2.proximal(y)
 
     # Convex conjugate
     assert func.convex_conj([x, y]) == l1.convex_conj(x) + l2.convex_conj(y)
