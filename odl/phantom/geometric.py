@@ -24,7 +24,71 @@ standard_library.install_aliases()
 
 import numpy as np
 
-__all__ = ('cuboid', 'defrise', 'ellipsoid_phantom', 'indicate_proj_axis')
+__all__ = ('circle', 'ellipse', 'cuboid', 'defrise', 'ellipsoid_phantom',
+           'indicate_proj_axis')
+
+
+def circle(space, value=1.0, radius=0.75, center_x=0, center_y=0):
+    """Circle phantom in 2d.
+
+    All values are given in normalized units, i.e. the circle should be
+    contained the rectangle [-1, -1] x [1, 1].
+
+    Parameters
+    ----------
+    space : `DiscreteLp`
+        Space the circle should live in, must be two-dimensional.
+    value : float, optional
+        The value inside the circle.
+    radius : float, optional
+        Radius of the circle.
+    center_x : float, optional
+        x coordinate of the center of the ellipse.
+    center_x : float, optional
+        y coordinate of the center of the ellipse.
+
+    See Also
+    --------
+    ellipse
+    ellipsoid_phantom
+    """
+    return ellipse(space,
+                   value=value,  axis_1=radius, axis_2=radius,
+                   center_x=center_x, center_y=center_y, rotation=0)
+
+
+def ellipse(space,
+            value=1.0, axis_1=0.75, axis_2=0.75,
+            center_x=0, center_y=0, rotation=0):
+    """Ellipse phantom in 2d.
+
+    All values are given in normalized units, i.e. the ellipse should be
+    contained the rectangle [-1, -1] x [1, 1].
+
+    Parameters
+    ----------
+    space : `DiscreteLp`
+        Space the ellipse should live in, must be two-dimensional.
+    value : float, optional
+        The value inside the ellipse.
+    axis_1 : float, optional
+        Width of the ellipse along the (unrotated) x-axis.
+    axis_2 : float, optional
+        Width of the ellipse along the (unrotated) y-axis.
+    center_x : float, optional
+        x coordinate of the center of the ellipse.
+    center_x : float, optional
+        y coordinate of the center of the ellipse.
+    rotation : float, optional
+        Rotation of the ellipse axes (in radians).
+
+    See Also
+    --------
+    circle
+    ellipsoid_phantom
+    """
+    ellipsoids = [[value, axis_1, axis_2, center_x, center_y, rotation]]
+    return ellipsoid_phantom(space, ellipsoids)
 
 
 def cuboid(space, min_pt=None, max_pt=None):
