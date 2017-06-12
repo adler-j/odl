@@ -8,13 +8,13 @@ increasing noise level.
 
 import odl
 import numpy as np
-#import fom
+# import fom
 import matplotlib.pyplot as plt
 
 # Discrete reconstruction space: discretized functions on the rectangle
 # [-20, 20]^2 with 300 samples per dimension.
 reco_space = odl.uniform_discr(
-    min_pt=[-20, -20], max_pt=[20, 20], shape=[100, 100], dtype='float32')
+    min_pt=[-20, -20], max_pt=[20, 20], shape=[100, 100])
 
 # Make a parallel beam geometry with flat detector
 # Angles: uniformly spaced, n = 360, min = 0, max = pi
