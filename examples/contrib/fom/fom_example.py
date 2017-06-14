@@ -7,6 +7,7 @@ increasing noise level.
 """
 
 import odl
+import odl.contrib.fom
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -27,8 +28,10 @@ mask = (np.asarray(phantom) == 1)
 
 for i in np.linspace(0.1, 1, 10):
     phantom_noisy = phantom + odl.phantom.white_noise(reco_space, stddev=i)
-    mse.append(odl.fom.mean_square_error(phantom_noisy, phantom))
-    mae.append(odl.fom.mean_absolute_error(phantom_noisy, phantom))
-    blur.append(odl.fom.blurring(phantom_noisy, phantom, mask))
-    false_struct.append(odl.fom.false_structures(phantom_noisy, phantom, mask))
+    mse.append(odl.contrib.fom.mean_square_error(phantom_noisy, phantom))
+    mae.append(odl.contrib.fom.mean_absolute_error(phantom_noisy, phantom))
+    blur.append(odl.contrib.fom.blurring(phantom_noisy, phantom, mask))
+    false_struct.append(odl.contrib.fom.false_structures(phantom_noisy,
+                                                         phantom, mask))
+
 plt.plot(mse)

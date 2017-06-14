@@ -43,7 +43,7 @@ from . import phantom
 from . import deform
 from . import ufunc_ops
 from . import datasets
-from . import fom
+from . import contrib
 
 from .util import test
 __all__ += ('test',)
