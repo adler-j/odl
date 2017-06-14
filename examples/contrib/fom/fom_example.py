@@ -21,17 +21,24 @@ phantom = odl.phantom.shepp_logan(reco_space, modified=True)
 
 mse = []
 mae = []
+mdv = []
+density_std = []
 blur = []
 false_struct = []
 
 mask = (np.asarray(phantom) == 1)
 
-for i in np.linspace(0.1, 1, 10):
-    phantom_noisy = phantom + odl.phantom.white_noise(reco_space, stddev=i)
+for stddev in np.linspace(0.1, 10, 100):
+    phantom_noisy = phantom + odl.phantom.white_noise(reco_space,
+                                                      stddev=stddev)
     mse.append(odl.contrib.fom.mean_square_error(phantom_noisy, phantom))
     mae.append(odl.contrib.fom.mean_absolute_error(phantom_noisy, phantom))
+    mdv.append(odl.contrib.fom.mean_density_value(phantom_noisy, phantom))
+    density_std.append(odl.contrib.
+                       fom.density_standard_deviation(phantom_noisy,
+                                                      phantom))
     blur.append(odl.contrib.fom.blurring(phantom_noisy, phantom, mask))
     false_struct.append(odl.contrib.fom.false_structures(phantom_noisy,
                                                          phantom, mask))
 
-plt.plot(mse)
+plt.plot(mdv)
