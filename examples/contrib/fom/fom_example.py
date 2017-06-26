@@ -35,9 +35,9 @@ for stddev in np.linspace(0.1, 10, 100):
     phantom_noisy = phantom + odl.phantom.white_noise(reco_space,
                                                       stddev=stddev)
     mse.append(odl.contrib.fom.supervised.
-               mean_square_error(phantom_noisy,
-                                 phantom,
-                                 normalized=True))
+               mean_squared_error(phantom_noisy,
+                                  phantom,
+                                  normalized=True))
 
     mae.append(odl.contrib.fom.supervised.
                mean_absolute_error(phantom_noisy,

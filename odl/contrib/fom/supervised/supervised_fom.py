@@ -10,18 +10,21 @@ Implementation of Figure of Merits (FOMs) for comparing reconstructions with
 a given reference.
 """
 
-__all__ = ('mean_square_error', 'mean_absolute_error', 'mean_value_difference',
-           'standard_deviation_difference', 'range_difference', 'blurring',
-           'false_structures')
+import odl
+
+__all__ = ('mean_squared_error', 'mean_absolute_error',
+           'mean_value_difference', 'standard_deviation_difference',
+           'range_difference', 'blurring', 'false_structures')
 
 
-def mean_square_error(test_data, ref_data, mask=None, normalized=False):
-    """Mean square error-based FOM between ``test_data`` and ``ref_data``.
+def mean_squared_error(data, ground_truth, mask=None, normalized=False):
+    """FOM returning the L2-distance between ``data`` and ``ground_truth``.
 
-    Evaluates mean square error between input (``test_data``) and
-    reference data (``ref_data``), by measuring consistency using the L2 -norm.
-    Allows for normalization (``normalized``) and a masking of the two spaces
-    (``mask``).
+    Evaluates `mean squared error
+    <https://en.wikipedia.org/wiki/Mean_squared_error>`_ between
+    input (``data``) and reference (``ground_truth``), by measuring
+    consistency using the L2 -norm. Allows for normalization (``normalized``)
+    and a masking of the two spaces (``mask``).
 
     Notes
     ----------
@@ -40,47 +43,46 @@ def mean_square_error(test_data, ref_data, mask=None, normalized=False):
 
     Parameters
     ----------
-    test_data : `LinearSpaceElementElement`
+    data : `FnBaseVector`
         Input data or reconstruction.
-    ref_data : `LinearSpaceElement`
-        Reference data to compare ``test_data`` to.
-    mask : `LinearSpaceElement`
+    ground_truth : `FnBaseVector`
+        Reference to compare ``data`` to.
+    mask : `FnBaseVector`
         Binary mask to define ROI in which FOM evaluation is performed.
-    normalized  : `Boolean`
+    normalized  : bool
         Boolean flag to switch between unormalized and normalized FOM.
 
     Returns
     -------
-    fom : `Scalar`
-        Scalar (float) indicating mean square error between ``test_data`` and
-        ``ref_data``. In normalized form the FOM takes values in [0, 1], with
-        higher correspondance at lower FOM value.
+    fom : float
+        Scalar (float) indicating mean squared error between ``data`` and
+        ``ground_truth``. In normalized form the FOM takes values in
+        [0, 1], with higher correspondance at lower FOM value.
     """
 
-    import odl
-
-    l2_normSquared = odl.solvers.L2NormSquared(test_data.space)
+    l2_normSquared = odl.solvers.L2NormSquared(data.space)
 
     if mask is not None:
-        test_data = test_data * mask
-        ref_data = ref_data * mask
+        data = data * mask
+        ground_truth = ground_truth * mask
 
-    diff = test_data - ref_data
+    diff = data - ground_truth
     fom = l2_normSquared(diff)
 
     if normalized:
-            fom /= (l2_normSquared(test_data) + l2_normSquared(ref_data))
+            fom /= (l2_normSquared(data) + l2_normSquared(ground_truth))
 
     return fom
 
 
-def mean_absolute_error(test_data, ref_data, mask=None, normalized=False):
-    """Mean absolute error-based FOM between ``test_data`` and ``ref_data``.
+def mean_absolute_error(data, ground_truth, mask=None, normalized=False):
+    """FOM returning the L1-distance between ``data`` and ``ground_truth``.
 
-    Evaluates mean absolute error between input (``test_data``) and
-    reference data (``ref_data``), by measuring consistency using the L1-norm.
-    Allows for normalization (``normalized``) and a masking of the two spaces
-    (``mask``).
+    Evaluates `mean absolute error
+    <https://en.wikipedia.org/wiki/Mean_absolute_error>`_ between
+    input (``data``) and reference (``ground_truth``), by measuring
+    consistency using the L1-norm. Allows for normalization (``normalized``)
+    and a masking of the two spaces (``mask``).
 
     Notes
     ----------
@@ -99,44 +101,44 @@ def mean_absolute_error(test_data, ref_data, mask=None, normalized=False):
 
     Parameters
     ----------
-    test_data : `LinearSpaceElement`
+    data : `FnBaseVector`
         Input data or reconstruction.
-    ref_data : `LinearSpaceElement`
-        Reference data to compare ``test_data`` to.
-    mask : `LinearSpaceElement`
+    ground_truth : `FnBaseVector`
+        Reference to compare ``data`` to.
+    mask : `FnBaseVector`
         Binary mask to define ROI in which FOM evaluation is performed.
-    normalized  : `Boolean`
+    normalized  : bool
         Boolean flag to switch between unormalized and normalized FOM.
 
     Returns
     -------
-    fom : `Scalar`
-        Scalar (float) indicating mean absolute error between ``test_data`` and
-        ``ref_data``. In normalized form the FOM takes values in [0, 1], with
-        higher correspondance at lower FOM value.
+    fom : float
+        Scalar (float) indicating mean absolute error between ``data`` and
+        ``ground_truth``. In normalized form the FOM takes values in
+        [0, 1], with higher correspondance at lower FOM value.
     """
 
-    import odl
-
-    l1_norm = odl.solvers.L1Norm(test_data.space)
+    l1_norm = odl.solvers.L1Norm(data.space)
     if mask:
-        test_data = test_data * mask
-        ref_data = ref_data * mask
-    diff = test_data - ref_data
+        data = data * mask
+        ground_truth = ground_truth * mask
+    diff = data - ground_truth
     fom = l1_norm(diff)
 
     if normalized:
-        fom /= (l1_norm(test_data) + l1_norm(ref_data))
+        fom /= (l1_norm(data) + l1_norm(ground_truth))
 
     return fom
 
 
-def mean_value_difference(test_data, ref_data, mask=None, normalized=False):
-    """Mean value-based FOM between ``test_data`` and ``ref_data``.
+def mean_value_difference(data, ground_truth, mask=None, normalized=False):
+    """FOM returning the  difference in mean value between ``data``
+    and ``ground_truth``.
 
-    Evaluates difference in mean value between input (``test_data``) and
-    reference data (``ref_data``). Allows for normalization (``normalized``)
-    and a masking of the two spaces (``mask``).
+    Evaluates difference in `mean value
+    <https://en.wikipedia.org/wiki/Mean_of_a_function>`_ between input
+    (``data``) and reference (``ground_truth``). Allows for normalization
+    (``normalized``) and a masking of the two spaces (``mask``).
 
     Notes
     ----------
@@ -167,81 +169,81 @@ def mean_value_difference(test_data, ref_data, mask=None, normalized=False):
 
     Parameters
     ----------
-    test_data : `LinearSpaceElement`
+    data : `FnBaseVector`
         Input data or reconstruction.
-    ref_data : `LinearSpaceElement`
-        Reference data to compare ``test_data`` to.
-    mask : `LinearSpaceElement`
+    ground_truth : `FnBaseVector`
+        Reference to compare ``data`` to.
+    mask : `FnBaseVector`
         Binary mask to define ROI in which FOM evaluation is performed.
-    normalized  : `Boolean`
+    normalized  : bool
         Boolean flag to switch between unormalized and normalized FOM.
 
     Returns
     -------
-    fom : `Scalar`
+    fom : float
         Scalar (float) indicating difference in mean value between
-        ``test_data`` and ``ref_data``. In normalized form the FOM takes
+        ``data`` and ``ground_truth``. In normalized form the FOM takes
         values in [0, 1], with higher correspondance at lower FOM value.
     """
 
     import numpy as np
-    import odl
 
-    l1_norm = odl.solvers.L1Norm(test_data.space)
+    l1_norm = odl.solvers.L1Norm(data.space)
 
     if mask:
-        test_data = test_data * mask
-        ref_data = ref_data * mask
+        data = data * mask
+        ground_truth = ground_truth * mask
 
-    # Identify positive part of test_data
-    pos_test_data = test_data.copy()
-    pos_test_data = pos_test_data.asarray()
-    pos_test_data[pos_test_data < 0] = 0
-    pos_test_data = test_data.space.element(pos_test_data)
+    # Identify positive part of data
+    pos_data = data.copy()
+    pos_data = pos_data.asarray()
+    pos_data[pos_data < 0] = 0
+    pos_data = data.space.element(pos_data)
 
-    # Identify negative part of test_data
-    neg_test_data = test_data.copy()
-    neg_test_data = neg_test_data.asarray()
-    neg_test_data[neg_test_data > 0] = 0
-    neg_test_data = test_data.space.element(neg_test_data)
+    # Identify negative part of data
+    neg_data = data.copy()
+    neg_data = neg_data.asarray()
+    neg_data[neg_data > 0] = 0
+    neg_data = data.space.element(neg_data)
 
-    # Identify positive part of ref_data
-    pos_ref_data = ref_data.copy()
-    pos_ref_data = pos_ref_data.asarray()
-    pos_ref_data[pos_ref_data < 0] = 0
-    pos_ref_data = ref_data.space.element(pos_ref_data)
+    # Identify positive part of ground_truth
+    pos_ground_truth = ground_truth.copy()
+    pos_ground_truth = pos_ground_truth.asarray()
+    pos_ground_truth[pos_ground_truth < 0] = 0
+    pos_ground_truth = ground_truth.space.element(pos_ground_truth)
 
-    # Identify negative part of ref_data
-    neg_ref_data = ref_data.copy()
-    neg_ref_data = neg_ref_data.asarray()
-    neg_ref_data[neg_ref_data > 0] = 0
-    neg_ref_data = ref_data.space.element(neg_ref_data)
+    # Identify negative part of ground_truth
+    neg_ground_truth = ground_truth.copy()
+    neg_ground_truth = neg_ground_truth.asarray()
+    neg_ground_truth[neg_ground_truth > 0] = 0
+    neg_ground_truth = ground_truth.space.element(neg_ground_truth)
 
     # Volume of space
-    vol = l1_norm(test_data.space.one())
+    vol = data.space.domain.volume
 
-    # Mean value of test_data
-    test_data_mean = (1 / vol) * (l1_norm(pos_test_data) -
-                                  l1_norm(neg_test_data))
+    # Mean value of data
+    data_mean = (1 / vol) * (l1_norm(pos_data) -
+                             l1_norm(neg_data))
 
-    # Mean value of ref_data
-    ref_data_mean = (1 / vol) * (l1_norm(pos_ref_data) -
-                                 l1_norm(neg_ref_data))
+    # Mean value of ground_truth
+    ground_truth_mean = (1 / vol) * (l1_norm(pos_ground_truth) -
+                                     l1_norm(neg_ground_truth))
 
-    fom = np.abs((test_data_mean - ref_data_mean))
+    fom = np.abs((data_mean - ground_truth_mean))
 
     if normalized:
-        fom /= (np.abs(test_data_mean) + np.abs(ref_data_mean))
+        fom /= (np.abs(data_mean) + np.abs(ground_truth_mean))
 
     return fom
 
 
-def standard_deviation_difference(test_data, ref_data, mask=None,
+def standard_deviation_difference(data, ground_truth, mask=None,
                                   normalized=False):
-    """Standard deviation-based FOM between ``test_data`` and ``ref_data``.
+    """FOM returning absolute difference in standard deviation between
+    ``data`` and ``ground_truth``.
 
-    Evaluates difference in standard deviation between input (``test_data``)
-    and reference data (``ref_data``). Allows normalization (``normalized``)
+    Evaluates difference in standard deviation between input (``data``)
+    and reference (``ground_truth``). Allows normalization (``normalized``)
     and a masking of the two spaces (``mask``).
 
     Notes
@@ -275,83 +277,82 @@ def standard_deviation_difference(test_data, ref_data, mask=None,
 
     Parameters
     ----------
-    test_data : `LinearSpaceElement`
+    data : `FnBaseVector`
         Input data or reconstruction.
-    ref_data : `LinearSpaceElement`
-        Reference data to compare ``test_data`` to.
-    mask : `LinearSpaceElement`
+    ground_truth : `FnBaseVector`
+        Reference to compare ``data`` to.
+    mask : `FnBaseVector`
         Binary mask to define ROI in which FOM evaluation is performed.
-    normalized  : `Boolean`
+    normalized  : bool
         Boolean flag to switch between unormalized and normalized FOM.
 
     Returns
     -------
-    fom : `Scalar`
+    fom : float
         Scalar (float) indicating absolute difference in standard deviation
-        between ``test_data`` and ``ref_data``. In normalized form the FOM
+        between ``data`` and ``ground_truth``. In normalized form the FOM
         takes values in [0, 1], with higher correspondance at lower FOM value.
     """
 
     import numpy as np
-    import odl
 
-    l1_norm = odl.solvers.L1Norm(test_data.space)
-    l2_norm = odl.solvers.L2Norm(test_data.space)
+    l1_norm = odl.solvers.L1Norm(data.space)
+    l2_norm = odl.solvers.L2Norm(data.space)
 
     if mask:
-        test_data = test_data * mask
-        ref_data = ref_data * mask
+        data = data * mask
+        ground_truth = ground_truth * mask
 
-    # Identify positive part of test_data
-    pos_test_data = test_data.copy()
-    pos_test_data = pos_test_data.asarray()
-    pos_test_data[pos_test_data < 0] = 0
-    pos_test_data = test_data.space.element(pos_test_data)
+    # Identify positive part of data
+    pos_data = data.copy()
+    pos_data = pos_data.asarray()
+    pos_data[pos_data < 0] = 0
+    pos_data = data.space.element(pos_data)
 
-    # Identify negative part of test_data
-    neg_test_data = test_data.copy()
-    neg_test_data = neg_test_data.asarray()
-    neg_test_data[neg_test_data > 0] = 0
-    neg_test_data = test_data.space.element(neg_test_data)
+    # Identify negative part of data
+    neg_data = data.copy()
+    neg_data = neg_data.asarray()
+    neg_data[neg_data > 0] = 0
+    neg_data = data.space.element(neg_data)
 
-    # Identify positive part of ref_data
-    pos_ref_data = ref_data.copy()
-    pos_ref_data = pos_ref_data.asarray()
-    pos_ref_data[pos_ref_data < 0] = 0
-    pos_ref_data = ref_data.space.element(pos_ref_data)
+    # Identify positive part of ground_truth
+    pos_ground_truth = ground_truth.copy()
+    pos_ground_truth = pos_ground_truth.asarray()
+    pos_ground_truth[pos_ground_truth < 0] = 0
+    pos_ground_truth = ground_truth.space.element(pos_ground_truth)
 
-    # Identify negative part of ref_data
-    neg_ref_data = ref_data.copy()
-    neg_ref_data = neg_ref_data.asarray()
-    neg_ref_data[neg_ref_data > 0] = 0
-    neg_ref_data = ref_data.space.element(neg_ref_data)
+    # Identify negative part of ground_truth
+    neg_ground_truth = ground_truth.copy()
+    neg_ground_truth = neg_ground_truth.asarray()
+    neg_ground_truth[neg_ground_truth > 0] = 0
+    neg_ground_truth = ground_truth.space.element(neg_ground_truth)
 
     # Volume of space
-    vol = l1_norm(test_data.space.one())
+    vol = data.space.domain.volume
 
-    # Mean value of test_data
-    test_data_mean = (1 / vol) * (l1_norm(pos_test_data) -
-                                  l1_norm(neg_test_data))
+    # Mean value of data
+    data_mean = (1 / vol) * (l1_norm(pos_data) -
+                             l1_norm(neg_data))
 
-    # Mean value of ref_data
-    ref_data_mean = (1 / vol) * (l1_norm(pos_ref_data) -
-                                 l1_norm(neg_ref_data))
+    # Mean value of ground_truth
+    ground_truth_mean = (1 / vol) * (l1_norm(pos_ground_truth) -
+                                     l1_norm(neg_ground_truth))
 
-    fom = np.abs((l2_norm(test_data - test_data_mean) -
-                  l2_norm(ref_data - ref_data_mean)))
+    fom = np.abs((l2_norm(data - data_mean) -
+                  l2_norm(ground_truth - ground_truth_mean)))
 
     if normalized:
-        fom /= (l2_norm(test_data - test_data_mean) +
-                l2_norm(ref_data - ref_data_mean))
+        fom /= (l2_norm(data - data_mean) +
+                l2_norm(ground_truth - ground_truth_mean))
 
     return fom
 
 
-def range_difference(test_data, ref_data, mask=None, normalized=False):
-    """Range-based FOM between ``test_data`` and ``ref_data``.
+def range_difference(data, ground_truth, mask=None, normalized=False):
+    """FOM returning difference in range between ``data`` and ``ground_truth``.
 
-    Evaluates difference in range between input (``test_data``) and reference
-    data (``ref_data``). Allows for normalization (``normalized``) and a
+    Evaluates difference in range between input (``data``) and reference
+    data (``ground_truth``). Allows for normalization (``normalized``) and a
     masking of the two spaces (``mask``).
 
     Notes
@@ -376,20 +377,20 @@ def range_difference(test_data, ref_data, mask=None, normalized=False):
 
     Parameters
     ----------
-    test_data : `LinearSpaceElement`
+    data : `FnBaseVector`
         Input data or reconstruction.
-    ref_data : `LinearSpaceElement`
-        Reference data to compare ``test_data`` to.
-    mask : `LinearSpaceElement`
+    ground_truth : `FnBaseVector`
+        Reference to compare ``data`` to.
+    mask : `FnBaseVector`
         Binary mask to define ROI in which FOM evaluation is performed.
-    normalized  : `Boolean`
+    normalized  : bool
         Boolean flag to switch between unormalized and normalized FOM.
 
     Returns
     -------
-    fom : `Scalar`
+    fom : float
         Scalar (float) indicating absolute difference in range between
-        ``test_data`` and ``ref_data``. In normalized form the FOM takes
+        ``data`` and ``ground_truth``. In normalized form the FOM takes
         values in [0, 1], with higher correspondance at lower FOM value.
     """
 
@@ -397,34 +398,36 @@ def range_difference(test_data, ref_data, mask=None, normalized=False):
 
     if mask:
         indices = np.where(mask is True)
-        test_data_range = (np.max(test_data.asarray()[indices]) -
-                           np.min(test_data.asarray()[indices]))
-        ref_data_range = (np.max(ref_data.asarray()[indices]) -
-                          np.min(ref_data.asarray()[indices]))
+        data_range = (np.max(data.asarray()[indices]) -
+                      np.min(data.asarray()[indices]))
+        ground_truth_range = (np.max(ground_truth.asarray()[indices]) -
+                              np.min(ground_truth.asarray()[indices]))
     else:
-        test_data_range = np.max(test_data) - np.min(test_data)
-        ref_data_range = np.max(ref_data) - np.min(ref_data)
+        data_range = np.max(data) - np.min(data)
+        ground_truth_range = np.max(ground_truth) - np.min(ground_truth)
 
-    fom = np.abs(test_data_range - ref_data_range)
+    fom = np.abs(data_range - ground_truth_range)
 
     if normalized:
-        fom /= np.abs(test_data_range + ref_data_range)
+        fom /= np.abs(data_range + ground_truth_range)
 
     return fom
 
 
-def blurring(test_data, ref_data, mask=None, normalized=False,
+def blurring(data, ground_truth, mask=None, normalized=False,
              weight_factor=30):
+    """FOM returning weighted L2-distance between ``data`` and ``ground_truth``,
+        emphasizing regions defined by ``mask``.
 
-    """Blurring-based FOM between ``test_data`` and ``ref_data``.
-
-    Evaluates mean square error between input (``test_data``) and reference
-    data (``ref_data``) using an added binary mask (``mask``), such that the
-    error is weighted with higher importance given to the defined
-    structure-of-interest. Allows for normalization (``normalized``).
+    Evaluates `mean squared error
+    <https://en.wikipedia.org/wiki/Mean_squared_error>`_ between input
+    (``data``) and reference data (``ground_truth``) using an added binary
+    mask (``mask``), such that the error is weighted with higher importance
+    given to the defined structure-of-interest. Allows for normalization
+    (``normalized``).
 
     NOTE: If omitting the mask argument, the blurring FOM is equivalent to the
-    mean square error FOM.
+    mean squared error FOM.
 
     Notes
     ----------
@@ -455,23 +458,23 @@ def blurring(test_data, ref_data, mask=None, normalized=False,
 
     Parameters
     ----------
-    test_data : `LinearSpaceElement`
+    data : `FnBaseVector`
         Input data or reconstruction.
-    ref_data : `LinearSpaceElement`
-        Reference data to compare ``test_data`` to.
-    mask : `LinearSpaceElement`
+    ground_truth : `FnBaseVector`
+        Reference to compare ``data`` to.
+    mask : `FnBaseVector`
         Binary mask to define ROI in which FOM evaluation is performed.
-    normalized  : `Boolean`
+    normalized  : bool
         Boolean flag to switch between unormalized and normalized FOM.
-    weight_factor : `Scalar`
+    weight_factor : float
         Positive real number for scaling of weighted mask. Higher value gives
         smoother weighting.
 
     Returns
     -------
-    fom : `Scalar`
-        Scalar (float) indicating weighted mean square error between
-        ``test_data`` and ``ref_data``. In normalized form the FOM takes
+    fom : float
+        Scalar (float) indicating weighted mean squared error between
+        ``data`` and ``ground_truth``. In normalized form the FOM takes
         values in [0, 1], with higher correspondance at lower FOM value.
     """
 
@@ -483,26 +486,28 @@ def blurring(test_data, ref_data, mask=None, normalized=False,
         mask = scimorph.distance_transform_edt(1 - mask)
         mask = np.exp(-mask / weight_factor)
 
-    fom = odl.contrib.fom.mean_square_error(test_data,
-                                            ref_data,
+    fom = odl.contrib.fom.mean_square_error(data,
+                                            ground_truth,
                                             mask=mask,
                                             normalized=normalized)
 
     return fom
 
 
-def false_structures(test_data, ref_data, mask=None, normalized=False,
+def false_structures(data, ground_truth, mask=None, normalized=False,
                      weight_factor=30):
+    """FOM returning weighted L2-distance between ``data`` and ``ground_truth``,
+        emphasizing complement of regions defined by ``mask``.
 
-    """False structures-based FOM between ``test_data`` and ``ref_data``.
-
-    Evaluates mean square error between input (``test_data``) and reference
-    data (``ref_data``) using an added binary mask (``mask``), such that the
-    error is weighted with lower importance given to the defined
-    structure-of-interest. Allows for normalization (``normalized``).
+    Evaluates `mean squared error
+    <https://en.wikipedia.org/wiki/Mean_squared_error>`_ between input
+    (``data``) and reference data (``ground_truth``) using an added binary
+    mask (``mask``), such that the error is weighted with lower importance
+    given to the defined structure-of-interest. Allows for normalization
+    (``normalized``).
 
     NOTE: If omitting the mask argument, the blurring FOM is equivalent to the
-    mean square error FOM.
+    mean squared error FOM.
 
     Notes
     ----------
@@ -534,23 +539,23 @@ def false_structures(test_data, ref_data, mask=None, normalized=False,
 
     Parameters
     ----------
-    test_data : `LinearSpaceElement`
+    data : `FnBaseVector`
         Input data or reconstruction.
-    ref_data : `LinearSpaceElement`
-        Reference data to compare 'test_data' to.
-    mask : `LinearSpaceElement`
+    ground_truth : `FnBaseVector`
+        Reference to compare 'data' to.
+    mask : `FnBaseVector`
         Binary mask to define ROI in which FOM evaluation is performed.
-    normalized  : `Boolean`
+    normalized  : bool
         Boolean flag to switch between unormalized and normalized FOM.
-    weight_factor : `Scalar`
+    weight_factor : float
         Positive real number for scaling of weighted mask. Higher value gives
         smoother weighting.
 
     Returns
     -------
-    fom : `Scalar`
-        Scalar (float) indicating weighted mean square error between
-        ``test_data`` and ``ref_data``. In normalized form the FOM takes
+    fom : float
+        Scalar (float) indicating weighted mean squared error between
+        ``data`` and ``ground_truth``. In normalized form the FOM takes
         values in [0, 1], with higher correspondance at lower FOM value.
     """
 
@@ -562,8 +567,8 @@ def false_structures(test_data, ref_data, mask=None, normalized=False,
         mask = scimorph.distance_transform_edt(1 - mask)
         mask = np.exp(mask / weight_factor)
 
-    fom = odl.contrib.fom.mean_square_error(test_data,
-                                            ref_data,
+    fom = odl.contrib.fom.mean_square_error(data,
+                                            ground_truth,
                                             mask=mask,
                                             normalized=normalized)
 
