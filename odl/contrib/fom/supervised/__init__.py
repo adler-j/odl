@@ -6,15 +6,9 @@
 # v. 2.0. If a copy of the MPL was not distributed with this file, You can
 # obtain one at https://mozilla.org/MPL/2.0/.
 
-"""Modules for handling figure of merits (FOM)."""
-
 from __future__ import absolute_import
-
 
 __all__ = ()
 
-from .supervised import *
-__all__ += supervised.__all__
-
-from .unsupervised import *
-__all__ += unsupervised.__all__
+from .supervised_fom import *
+__all__ += supervised_fom.__all__

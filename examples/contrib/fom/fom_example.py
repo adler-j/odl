@@ -1,8 +1,8 @@
 """Simple example of implemented figure-of-merits (FOMs)
 
 Numerical test of a few implemented FOMs (mean square error, mean
-absolute error, blur, and false structures) as a function of
-increasing noise level.
+absolute error, density standard deviation, density range, blur, and false
+structures) as a function of increasing noise level.
 
 """
 
@@ -11,7 +11,7 @@ import odl.contrib.fom
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Discrete reconstruction space: discretized functions on the rectangle
+# Discrete space: discretized functions on the rectangle
 # [-20, 20]^2 with 100 samples per dimension.
 reco_space = odl.uniform_discr(
     min_pt=[-20, -20], max_pt=[20, 20], shape=[100, 100])
@@ -21,24 +21,95 @@ phantom = odl.phantom.shepp_logan(reco_space, modified=True)
 
 mse = []
 mae = []
-mdv = []
-density_std = []
+mvd = []
+std_diff = []
+range_diff = []
 blur = []
 false_struct = []
 
+# Create mask for ROI to evaluate blurring and false structures. Arbitrarily
+# chosen as bone in Shepp-Logan phantom.
 mask = (np.asarray(phantom) == 1)
 
 for stddev in np.linspace(0.1, 10, 100):
     phantom_noisy = phantom + odl.phantom.white_noise(reco_space,
                                                       stddev=stddev)
-    mse.append(odl.contrib.fom.mean_square_error(phantom_noisy, phantom))
-    mae.append(odl.contrib.fom.mean_absolute_error(phantom_noisy, phantom))
-    mdv.append(odl.contrib.fom.mean_density_value(phantom_noisy, phantom))
-    density_std.append(odl.contrib.
-                       fom.density_standard_deviation(phantom_noisy,
-                                                      phantom))
-    blur.append(odl.contrib.fom.blurring(phantom_noisy, phantom, mask))
-    false_struct.append(odl.contrib.fom.false_structures(phantom_noisy,
-                                                         phantom, mask))
+    mse.append(odl.contrib.fom.supervised.
+               mean_square_error(phantom_noisy,
+                                 phantom,
+                                 normalized=True))
 
-plt.plot(mdv)
+    mae.append(odl.contrib.fom.supervised.
+               mean_absolute_error(phantom_noisy,
+                                   phantom,
+                                   normalized=True))
+
+    mvd.append(odl.contrib.fom.supervised.
+               mean_value_difference(phantom_noisy,
+                                     phantom,
+                                     normalized=True))
+
+    std_diff.append(odl.contrib.fom.supervised.
+                    standard_deviation_difference(phantom_noisy,
+                                                  phantom,
+                                                  normalized=True))
+
+    range_diff.append(odl.contrib.fom.supervised.
+                      range_difference(phantom_noisy,
+                                       phantom,
+                                       normalized=True))
+
+    blur.append(odl.contrib.fom.supervised.blurring(phantom_noisy,
+                                                    phantom,
+                                                    mask,
+                                                    normalized=True,
+                                                    weight_factor=30))
+
+    false_struct.append(odl.contrib.fom.supervised.
+                        false_structures(phantom_noisy,
+                                         phantom,
+                                         mask,
+                                         normalized=True,
+                                         weight_factor=30))
+
+plt.figure()
+plt.plot(mse)
+plt.xlabel('Noise level')
+plt.ylabel('FOM')
+plt.title('Mean square error')
+
+plt.figure()
+plt.plot(mae)
+plt.xlabel('Noise level')
+plt.ylabel('FOM')
+plt.title('Mean absolute error')
+
+plt.figure()
+plt.plot(mvd)
+plt.xlabel('Noise level')
+plt.ylabel('FOM')
+plt.title('Mean value difference')
+
+plt.figure()
+plt.plot(std_diff)
+plt.xlabel('Noise level')
+plt.ylabel('FOM')
+plt.title('Standard deviation difference')
+
+plt.figure()
+plt.plot(range_diff)
+plt.xlabel('Noise level')
+plt.ylabel('FOM')
+plt.title('Range difference')
+
+plt.figure()
+plt.plot(blur)
+plt.xlabel('Noise level')
+plt.ylabel('FOM')
+plt.title('Blurring (weighted importance on foreground)')
+
+plt.figure()
+plt.plot(false_struct)
+plt.xlabel('Noise level')
+plt.ylabel('FOM')
+plt.title('Blurring (weighted importance on background)')
