@@ -26,6 +26,7 @@ std_diff = []
 range_diff = []
 blur = []
 false_struct = []
+ssim = []
 
 # Create mask for ROI to evaluate blurring and false structures. Arbitrarily
 # chosen as bone in Shepp-Logan phantom.
@@ -72,6 +73,11 @@ for stddev in np.linspace(0.1, 10, 100):
                                          normalized=True,
                                          weight_factor=30))
 
+    ssim.append(odl.contrib.fom.supervised.
+                ssim(phantom_noisy,
+                     phantom,
+                     normalized=True))
+
 plt.figure()
 plt.plot(mse)
 plt.xlabel('Noise level')
@@ -113,3 +119,9 @@ plt.plot(false_struct)
 plt.xlabel('Noise level')
 plt.ylabel('FOM')
 plt.title('Blurring (weighted importance on background)')
+
+plt.figure()
+plt.plot(ssim)
+plt.xlabel('Noise level')
+plt.ylabel('FOM')
+plt.title('SSIM')

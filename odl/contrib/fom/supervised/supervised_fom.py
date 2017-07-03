@@ -14,7 +14,8 @@ import odl
 
 __all__ = ('mean_squared_error', 'mean_absolute_error',
            'mean_value_difference', 'standard_deviation_difference',
-           'range_difference', 'blurring', 'false_structures')
+           'range_difference', 'blurring', 'false_structures',
+           'ssim')
 
 
 def mean_squared_error(data, ground_truth, mask=None, normalized=False):
@@ -486,10 +487,10 @@ def blurring(data, ground_truth, mask=None, normalized=False,
         mask = scimorph.distance_transform_edt(1 - mask)
         mask = np.exp(-mask / weight_factor)
 
-    fom = odl.contrib.fom.mean_square_error(data,
-                                            ground_truth,
-                                            mask=mask,
-                                            normalized=normalized)
+    fom = odl.contrib.fom.mean_squared_error(data,
+                                             ground_truth,
+                                             mask=mask,
+                                             normalized=normalized)
 
     return fom
 
@@ -567,9 +568,78 @@ def false_structures(data, ground_truth, mask=None, normalized=False,
         mask = scimorph.distance_transform_edt(1 - mask)
         mask = np.exp(mask / weight_factor)
 
-    fom = odl.contrib.fom.mean_square_error(data,
-                                            ground_truth,
-                                            mask=mask,
-                                            normalized=normalized)
+    fom = odl.contrib.fom.mean_squared_error(data,
+                                             ground_truth,
+                                             mask=mask,
+                                             normalized=normalized)
 
     return fom
+
+
+def ssim(data, ground_truth,
+         size=11, sigma=1.5, K1=0.01, K2=0.03, dynamic_range=None,
+         normalized=False):
+    """Structural SIMilarity between ``data`` and ``ground_truth``.
+
+    Evaluates `structural similarity
+    <https://en.wikipedia.org/wiki/Structural_similarity>`_ between
+    input (``data``) and reference (``ground_truth``).
+
+    Parameters
+    ----------
+    data : `FnBaseVector`
+        Input data or reconstruction.
+    ground_truth : `FnBaseVector`
+        Reference to compare ``data`` to.
+    normalized : bool
+        TEXT
+
+    Returns
+    -------
+    fom : float
+        Scalar (float) indicating structural similarity between ``data`` and
+        ``ground_truth``. Takes values in [-1, 1], with -1 indicating full
+        dis-similarity and 1 full similarity. Uncorrelated images will have
+        similarity index 0. In normalized form the FOM values are rescaled to
+        [0, 1], with higher correspondance at lower FOM value.
+    """
+    from scipy.signal import fftconvolve
+    import numpy as np
+
+    data = np.asarray(data)
+    ground_truth = np.asarray(ground_truth)
+    ndim = data.ndim
+
+    # Compute gaussian
+    coords = np.meshgrid(*(ndim * (np.linspace(-(size - 1)/2,
+                                               (size - 1)/2, size),)))
+    window = np.exp(-(sum(xi**2 for xi in coords) / (2.0 * sigma**2)))
+    window /= np.sum(window)
+
+    def smoothen(img):
+        return fftconvolve(window, img, mode='valid')
+
+    if dynamic_range is None:
+        dynamic_range = np.max(ground_truth) - np.min(ground_truth)
+
+    C1 = (K1 * dynamic_range)**2
+    C2 = (K2 * dynamic_range)**2
+    mu1 = smoothen(data)
+    mu2 = smoothen(ground_truth)
+    mu1_sq = mu1*mu1
+    mu2_sq = mu2*mu2
+    mu1_mu2 = mu1*mu2
+    sigma1_sq = smoothen(data * data) - mu1_sq
+    sigma2_sq = smoothen(ground_truth * ground_truth) - mu2_sq
+    sigma12 = smoothen(data * ground_truth) - mu1_mu2
+
+    nom = (2*mu1_mu2 + C1) * (2*sigma12 + C2)
+    denom = (mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2)
+    pointwise_ssim = nom/denom
+
+    ssim = np.mean(pointwise_ssim)
+
+    if normalized:
+        return 0.5 - ssim / 2
+    else:
+        return ssim
