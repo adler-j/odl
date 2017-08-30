@@ -31,7 +31,7 @@ class TheanoOperator(theano.Op):
     implements `Operator.derivative` and `Operator.adjoint`.
     """
 
-    # Properties used by theano for __eq__ and __hash__
+    # Properties used by theano for __eq__, __hash__ and __repr__
     __props__ = ('operator',)
 
     def __init__(self, operator):
@@ -86,7 +86,6 @@ class TheanoOperator(theano.Op):
         # Create tensor type with correct dtype.
         # The second argument specifies the number of dimensions of the output.
         # False means that we do not support broadcasting.
-
         if isinstance(self.operator, Functional):
             # Make scalar out type
             out_type = theano.tensor.TensorVariable(
@@ -123,22 +122,22 @@ class TheanoOperator(theano.Op):
         ...                    [0, 1, 1]], dtype=float)
         >>> op = odl.MatrixOperator(matrix, domain=space)
         >>> matrix_op = TheanoOperator(op)
-        >>> x = theano.tensor.dvector('x')
+        >>> x = theano.tensor.dvector()
         >>> op_x = matrix_op(x)
-        >>> op_func = theano.function([x], [op_x])
+        >>> op_func = theano.function([x], op_x)
         >>> op_func([1, 2, 3])
-        [array([ 4.,  5.])]
+        array([ 4.,  5.])
 
-        Evaluate a unctional, i.e., an operator with scalar output:
+        Evaluate a functional, i.e., an operator with scalar output:
 
         >>> space = odl.rn(3)
         >>> functional = odl.solvers.L2NormSquared(space)
         >>> func_op = TheanoOperator(functional)
         >>> x = theano.tensor.dvector()
         >>> op_x = func_op(x)
-        >>> op_func = theano.function([x], [op_x])
+        >>> op_func = theano.function([x], op_x)
         >>> op_func([1, 2, 3])
-        [array(14.0)]
+        array(14.0)
         """
         x = inputs[0]
         z = output_storage[0]
@@ -193,13 +192,13 @@ class TheanoOperator(theano.Op):
         ...                    [0, 1, 1]], dtype=float)
         >>> op = odl.MatrixOperator(matrix, domain=space)
         >>> matrix_op = TheanoOperator(op)
-        >>> x = theano.tensor.dvector('x')
+        >>> x = theano.tensor.dvector()
         >>> op_x = matrix_op(x)
         >>> cost = op_x.sum()
         >>> cost_grad = theano.grad(cost, x)
-        >>> cost_grad_func = theano.function([x], [cost_grad])
+        >>> cost_grad_func = theano.function([x], cost_grad)
         >>> cost_grad_func([1, 2, 3])
-        [array([ 1.,  1.,  2.])]
+        array([ 1.,  1.,  2.])
         >>> sum_grad = np.array([1.0, 1.0])
         >>> np.allclose(cost_grad_func([1, 2, 3]), matrix.T.dot(sum_grad))
         True
@@ -212,9 +211,9 @@ class TheanoOperator(theano.Op):
         >>> x = theano.tensor.dvector()
         >>> op_x = func_op(x)
         >>> grad_x = theano.grad(op_x, x)
-        >>> grad_func = theano.function([x], [grad_x])
+        >>> grad_func = theano.function([x], grad_x)
         >>> grad_func([1, 2, 3])  # should be 2 * input
-        [array([ 2.,  4.,  6.])]
+        array([ 2.,  4.,  6.])
 
         Notes
         -----
@@ -286,13 +285,15 @@ class TheanoOperator(theano.Op):
 
         op = self
 
-        class TheanoJacobian(theano.Op):
+        class TheanoJacobianAdjoint(theano.Op):
 
-            """Wrap ``op.derivative`` into a Theano Op.
+            __props__ = ()
+
+            """Wrap ``op.derivative(x).adjoint(v)`` into a Theano Op.
 
             This Op has two inputs, ``x`` and ``v``, where ``x``
             is the point at which the Jacobian is taken, and ``v`` the
-            tensor to which it is applied. There is only one output,
+            tensor to which its adjoint is applied. There is only one output,
             which is of the same type as ``v`` (and ``x``).
             """
 
@@ -322,7 +323,7 @@ class TheanoOperator(theano.Op):
                 # future.int
                 return [tuple(native(si) for si in op.operator.domain.shape)]
 
-        r_op = TheanoJacobian()
+        r_op = TheanoJacobianAdjoint()
         r_op_apply = r_op(inputs[0], eval_points[0])
         return [r_op_apply]
 
