@@ -12,7 +12,7 @@ import theano
 import theano.tensor as T
 import numpy as np
 import odl
-from odl.contrib import theano as theano_wrapper
+import odl.contrib.theano
 
 # --- Wrap ODL operator as Theano operator --- #
 
@@ -29,7 +29,7 @@ x = [1., 2.]
 x_theano = T.fvector('x')
 
 # Create theano layer from ODL operator
-odl_op_layer = theano_wrapper.TheanoOperator(odl_op)
+odl_op_layer = odl.contrib.theano.TheanoOperator(odl_op)
 
 # Build computation graph
 y_theano = odl_op_layer(x_theano)
@@ -46,7 +46,7 @@ odl_cost = odl.solvers.L2NormSquared(odl_op.range)
 odl_functional = odl_cost * odl_op
 
 # Create theano layer from ODL cost
-cost_theano_layer = theano_wrapper.TheanoOperator(odl_cost)
+cost_theano_layer = odl.contrib.theano.TheanoOperator(odl_cost)
 
 # Build computation graph for the gradient of the composed cost wrt x
 y_theano = odl_op_layer(x_theano)
