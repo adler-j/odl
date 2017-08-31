@@ -660,17 +660,13 @@ def test(arguments=None):
     pytest.main(args)
 
 
-def run_doctests(skip_if=False, extraglobs=None):
+def run_doctests(skip_if=False):
     """Run all doctests in the current module.
 
     Parameters
     ----------
     skip_if : bool
         For ``True``, skip the doctests in this module.
-    extraglobs : dict
-        Update the global namespace during doctests with this dictionary.
-        For ``None``, only the ``odl`` and ``np`` (Numpy) modules are in
-        the global namespace.
     """
     from doctest import testmod, NORMALIZE_WHITESPACE, SKIP
     optionflags = NORMALIZE_WHITESPACE
@@ -693,14 +689,7 @@ def run_doctests(skip_if=False, extraglobs=None):
                               'interpreter if the doctests do not work.',
                               RuntimeWarning)
 
-    if extraglobs is None:
-        extraglobs = {'odl': odl, 'np': np}
-    else:
-        extraglobs_in = extraglobs
-        extraglobs = {'odl': odl, 'np': np}
-        extraglobs.update(extraglobs_in)
-
-    testmod(optionflags=optionflags, extraglobs=extraglobs)
+    testmod(optionflags=optionflags, extraglobs={'odl': odl, 'np': np})
 
 
 if __name__ == '__main__':
