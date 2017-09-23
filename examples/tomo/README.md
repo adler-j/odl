@@ -2,15 +2,19 @@
 
 These examples demonstrate the capability of ODL to perform tomographic projections, back-projections and filtered back-projection reconstruction in the various supported geometries. They also serve as copy-and-paste templates for the basic setup of more complex applications in tomography.
 
-For examples on how to use the tomography operators in inverse problems, see the [examples/solvers](../solvers) folder.
+For use cases of these operators in inverse problems, see the [examples/solvers](../solvers) folder.
 
-Note that several of these examples are best/only runnable with astra, which can be easily installed via:
+Note that most of these examples (basically all except 2D parallel beam examples) are runnable only with ASTRA, which can be easily installed via:
 
     conda install -c astra-toolbox astra-toolbox
-    
-If using astra is for some reason not possible, the 2d parallel beam examples can be run with scikit-image, installed by:
+
+If using ASTRA is for some reason not possible, the 2d parallel beam examples can be run with `scikit-image`, installed with
 
     pip install scikit-image
+
+or
+
+    conda install scikit-image
 
 ## Basic usage examples
 

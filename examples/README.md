@@ -1,15 +1,15 @@
 # Examples
 
-This directory contains examples of how to use various ODL functionality.
+This directory contains example code demonstrating ODL functionality.
 
 ## Content
 
-* [deform](deform) How to create and use the operators in the `odl.deform` package.
-* [diagnostics](diagnostics) How to use `SpaceTest` and `OperatorTest` to test operators and spaces.
-* [operator](operator) Examples on how to create sub-classes of `Operator` and call these.
-* [solvers](solvers) How to use the various solvers included in the ODL package. This folder contains some of the more complete examples of ODL functionality, all the way from creating e.g. a `RayTransform` to using it to solve an inverse problem.
-* [space](space) Demonstrations of general functionality of spaces and how to create a new space.
-* [tomo](tomo) Specific examples on how to create and call `RayTransform` for various geometries. Also contains examples of the various analytic reconstruction methods (but see `solvers` for more examples) and performance examples.
-* [trafos](trafos) Examples on how to create and call `FourierTransform` and `WaveletTransform`. See `solvers` for examples on how they can be used in inverse problems.
-* [ufunc_ops](ufunc_ops) Examples on how to use functionality like `sin` as an operator.
-* [visualization](visualization) Demonstrates the various visualization functionality included in ODL, including 1d, 2d and slice views, in addition to real-time updates.
+* [deform](deform) Creating and using deformation operators in the `odl.deform` package.
+* [diagnostics](diagnostics) Testing operators and spaces with `OperatorTest` and `SpaceTest`.
+* [operator](operator) Examples for subclassing `Operator`.
+* [solvers](solvers) Usage examples for solvers in the odl.solvers package. Some of the examples use a wide variety of ODL features, from creating a forward operator, e.g., a `RayTransform`, to solving an inverse problem.
+* [space](space) Demonstrations of general functionality of spaces, and creation of a new space.
+* [tomo](tomo) How to create and call a `RayTransform` for various geometries, how to use analytic reconstruction methods like FBP, and a performance comparison.
+* [trafos](trafos) Showcase of `FourierTransform` and `WaveletTransform`. See `solvers` for use cases in inverse problems.
+* [ufunc_ops](ufunc_ops) Examples on how to use functions like `numpy.sin` as an operator.
+* [visualization](visualization) Demonstration of the visualization functionality in ODL, including 1d, 2d and slice views, as well as real-time updates.
