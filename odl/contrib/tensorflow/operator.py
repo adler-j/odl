@@ -30,23 +30,8 @@ class TensorflowOperator(odl.Operator):
         range = odl.fn(np.prod(output_tensor.shape.as_list()),
                        dtype=output_tensor.dtype.as_numpy_dtype)
 
-        self.dx = tf.placeholder(input_tensor.dtype,
-                                 shape=input_tensor.shape)
-        self.dy = tf.placeholder(output_tensor.dtype,
-                                 shape=output_tensor.shape)
-
-        adjoint_of_derivative_tensor = tf.gradients(
-            self.output_tensor, [self.input_tensor], [self.dy])[0]
-        self.adjoint_of_derivative_tensor = (range.weighting.const *
-                                             adjoint_of_derivative_tensor)
-
-        # Since tensorflow does not support forward differentiation, use trick
-        # that adjoint of the derivative of adjoint of the derivative is simply
-        # the derivative.
-        derivative_tensor = tf.gradients(
-            adjoint_of_derivative_tensor, [self.dy], [self.dx])[0]
-        self.derivative_tensor = (range.weighting.const *
-                                  derivative_tensor)
+        self.__adjoint_of_derivative_tensor = None
+        self.__derivative_tensor = None
 
         if sess is None:
             self.sess = tf.get_default_session()
@@ -55,11 +40,47 @@ class TensorflowOperator(odl.Operator):
 
         super(TensorflowOperator, self).__init__(domain, range, linear=linear)
 
-    def _call(self, x):
-        result = self.sess.run(self.output_tensor,
-                               feed_dict={self.input_tensor: np.asarray(x)})
+    @property
+    def adjoint_of_derivative_tensor(self):
+        """Adjoint of the derivative of the output w.r.t. the input.
 
-        return result
+        Implemented as a property to allow lazy evaluation. This speeds up
+        graph creation and defers errors to when the method is called.
+        """
+        if self.__adjoint_of_derivative_tensor is None:
+            self.dy = tf.placeholder(self.output_tensor.dtype,
+                                     shape=self.output_tensor.shape)
+            adjoint_of_derivative_tensor = tf.gradients(
+                self.output_tensor, [self.input_tensor], [self.dy])[0]
+            self.adjoint_of_derivative_tensor = (range.weighting.const *
+                                                 adjoint_of_derivative_tensor)
+        return self.__adjoint_of_derivative_tensor
+
+    @property
+    def derivative_tensor(self):
+        """Derivative of the output w.r.t. the input.
+
+        Implemented as a property to allow lazy evaluation. This speeds up
+        graph creation and defers errors to when the method is called.
+        """
+        if self.__derivative_tensor is None:
+            # Since tensorflow does not support forward differentiation, use
+            # trick that adjoint of the derivative of adjoint of the derivative
+            # is simply the derivative.
+            self.dx = tf.placeholder(self.input_tensor.dtype,
+                                     shape=self.input_tensor.shape)
+            derivative_tensor = tf.gradients(
+                self.adjoint_of_derivative_tensor, [self.dy], [self.dx])[0]
+            self.__derivative_tensor = derivative_tensor
+        return self.__derivative_tensor
+
+    def _call(self, x):
+        x_reshaped = np.reshape(np.asarray(x), self.input_tensor.shape)
+
+        result = self.sess.run(self.output_tensor,
+                               feed_dict={self.input_tensor: x_reshaped})
+
+        return np.ravel(result)
 
     def derivative(self, x):
         op = self
