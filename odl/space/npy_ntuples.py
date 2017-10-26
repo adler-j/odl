@@ -11,6 +11,7 @@
 # Imports for common Python 2/3 codebase
 from __future__ import print_function, division, absolute_import
 from future.utils import native
+import builtins
 
 import ctypes
 from functools import partial
@@ -18,19 +19,19 @@ from numbers import Integral
 import numpy as np
 import scipy.linalg as linalg
 from scipy.sparse.base import isspmatrix
+import sys
 
 from odl.set import RealNumbers, ComplexNumbers
-from odl.space.base_ntuples import (
-    NtuplesBase, NtuplesBaseVector, FnBase, FnBaseVector)
+from odl.space.base_ntuples import FnBase, FnBaseVector
 from odl.space.weighting import (
     Weighting, MatrixWeighting, ArrayWeighting,
     ConstWeighting, NoWeighting,
     CustomInner, CustomNorm, CustomDist)
 from odl.util import dtype_repr, is_real_dtype
-from odl.util.ufuncs import NumpyNtuplesUfuncs
+from odl.util.ufuncs import NumpyFnUfuncs
 
 
-__all__ = ('NumpyNtuples', 'NumpyNtuplesVector', 'NumpyFn', 'NumpyFnVector',
+__all__ = ('NumpyFn', 'NumpyFnVector',
            'npy_weighted_dist', 'npy_weighted_norm', 'npy_weighted_inner')
 
 
@@ -42,533 +43,17 @@ THRESHOLD_SMALL = 100
 THRESHOLD_MEDIUM = 50000
 
 
-class NumpyNtuples(NtuplesBase):
+class NumpyFn(FnBase):
 
-    """Set of n-tuples of arbitrary type."""
+    """Set of n-tuples of arbitrary type.
 
-    def element(self, inp=None, data_ptr=None):
-        """Create a new element.
-
-        Parameters
-        ----------
-        inp : `array-like`, optional
-            Input to initialize the new element.
-
-            If ``inp`` is ``None``, an empty element is created with no
-            guarantee of its state (memory allocation only).
-
-            If ``inp`` is a `numpy.ndarray` of shape ``(size,)``
-            and the same data type as this space, the array is wrapped,
-            not copied.
-            Other `array-like` objects are copied.
-
-        Returns
-        -------
-        element : `NumpyNtuplesVector`
-            The new element created (from ``inp``).
-
-        Notes
-        -----
-        This method preserves "array views" of correct size and type,
-        see the examples below.
-
-        Examples
-        --------
-        >>> strings3 = NumpyNtuples(3, dtype='U1')  # 1-char strings
-        >>> x = strings3.element(['w', 'b', 'w'])
-        >>> print(x)
-        [w, b, w]
-        >>> x.space
-        ntuples(3, '<U1')
-
-        Construction from data pointer:
-
-        >>> int3 = NumpyNtuples(3, dtype='int')
-        >>> x = int3.element([1, 2, 3])
-        >>> y = int3.element(data_ptr=x.data_ptr)
-        >>> print(y)
-        [1, 2, 3]
-        >>> y[0] = 5
-        >>> print(x)
-        [5, 2, 3]
-        """
-        if inp is None:
-            if data_ptr is None:
-                arr = np.empty(self.size, dtype=self.dtype)
-                return self.element_type(self, arr)
-            else:
-                ctype_array_def = ctypes.c_byte * (self.size *
-                                                   self.dtype.itemsize)
-                as_ctype_array = ctype_array_def.from_address(data_ptr)
-                as_numpy_array = np.ctypeslib.as_array(as_ctype_array)
-                arr = as_numpy_array.view(dtype=self.dtype)
-                return self.element_type(self, arr)
-        else:
-            if data_ptr is None:
-                if inp in self:
-                    return inp
-                else:
-                    arr = np.array(inp, copy=False, dtype=self.dtype, ndmin=1)
-                    if arr.shape != (self.size,):
-                        raise ValueError('expected input shape {}, got {}'
-                                         ''.format((self.size,), arr.shape))
-
-                    return self.element_type(self, arr)
-            else:
-                raise ValueError('cannot provide both `inp` and `data_ptr`')
-
-    def zero(self):
-        """Create a vector of zeros.
-
-        Examples
-        --------
-        >>> c3 = NumpyNtuples(3, dtype=complex)
-        >>> x = c3.zero()
-        >>> x
-        ntuples(3, 'complex').element([0j, 0j, 0j])
-        """
-        return self.element(np.zeros(self.size, dtype=self.dtype))
-
-    def one(self):
-        """Create a vector of ones.
-
-        Examples
-        --------
-        >>> c3 = NumpyNtuples(3, dtype=complex)
-        >>> x = c3.one()
-        >>> x
-        ntuples(3, 'complex').element([(1+0j), (1+0j), (1+0j)])
-        """
-        return self.element(np.ones(self.size, dtype=self.dtype))
-
-    def __repr__(self):
-        """Return ``repr(self)``."""
-        constructor_name = 'ntuples'
-
-        inner_str = '{}'.format(self.size)
-        inner_str += ', {}'.format(dtype_repr(self.dtype))
-
-        return '{}({})'.format(constructor_name, inner_str)
-
-    @property
-    def element_type(self):
-        """`NumpyNtuplesVector`"""
-        return NumpyNtuplesVector
-
-    impl = 'numpy'
-
-    @staticmethod
-    def available_dtypes():
-        """Available data types.
-
-        Notes
-        -----
-        This is all dtypes available to numpy. See ``numpy.sctypes``
-        for more information.
-
-        The available dtypes may depend on the specific system used.
-        """
-        all_types = []
-        for val in np.sctypes.values():
-            all_types.extend(val)
-        return all_types
-
-
-class NumpyNtuplesVector(NtuplesBaseVector):
-
-    """Representation of an `NumpyNtuples` element."""
-
-    def __init__(self, space, data):
-        """Initialize a new instance."""
-        super(NumpyNtuplesVector, self).__init__(space)
-        self.__data = data
-
-    @property
-    def data(self):
-        """Raw Numpy array representing the data."""
-        return self.__data
-
-    def asarray(self, start=None, stop=None, step=None, out=None):
-        """Extract the data of this array as a numpy array.
-
-        Parameters
-        ----------
-        start : int, optional
-            Start position. ``None`` means the first element.
-        stop : int, optional
-            One element past the last element to be extracted.
-            ``None`` means the last element.
-        step : int, optional
-            Step length. ``None`` is equivalent to 1.
-        out : `numpy.ndarray`, optional
-            Array to which the result should be written.
-            Has to be contiguous and of the correct data type.
-
-        Returns
-        -------
-        asarray : `numpy.ndarray`
-            Numpy array of the same type as the space.
-
-        Examples
-        --------
-        >>> import ctypes
-        >>> vec = NumpyNtuples(3, 'float').element([1, 2, 3])
-        >>> vec.asarray()
-        array([ 1.,  2.,  3.])
-        >>> vec.asarray(start=1, stop=3)
-        array([ 2.,  3.])
-
-        Using the out parameter
-
-        >>> out = np.empty((3,), dtype='float')
-        >>> result = vec.asarray(out=out)
-        >>> out
-        array([ 1.,  2.,  3.])
-        >>> result is out
-        True
-        """
-        if out is None:
-            return self.data[start:stop:step]
-        else:
-            out[:] = self.data[start:stop:step]
-            return out
-
-    @property
-    def data_ptr(self):
-        """A raw pointer to the data container.
-
-        Examples
-        --------
-        >>> import ctypes
-        >>> vec = NumpyNtuples(3, 'int32').element([1, 2, 3])
-        >>> arr_type = ctypes.c_int32 * 3
-        >>> buffer = arr_type.from_address(vec.data_ptr)
-        >>> arr = np.frombuffer(buffer, dtype='int32')
-        >>> print(arr)
-        [1 2 3]
-
-        In-place modification via pointer:
-
-        >>> arr[0] = 5
-        >>> print(vec)
-        [5, 2, 3]
-        """
-        return self.data.ctypes.data
-
-    def __eq__(self, other):
-        """Return ``self == other``.
-
-        Returns
-        -------
-        equals : bool
-            ``True`` if all entries of other are equal to this
-            vector's entries, ``False`` otherwise.
-
-        Notes
-        -----
-        Space membership is not checked, hence vectors from
-        different spaces can be equal.
-
-        Examples
-        --------
-        >>> vec1 = NumpyNtuples(3, int).element([1, 2, 3])
-        >>> vec2 = NumpyNtuples(3, int).element([-1, 2, 0])
-        >>> vec1 == vec2
-        False
-        >>> vec2 = NumpyNtuples(3, int).element([1, 2, 3])
-        >>> vec1 == vec2
-        True
-
-        Space membership matters:
-
-        >>> vec2 = NumpyNtuples(3, float).element([1, 2, 3])
-        >>> vec1 == vec2 or vec2 == vec1
-        False
-        """
-        if other is self:
-            return True
-        elif other not in self.space:
-            return False
-        else:
-            return np.array_equal(self.data, other.data)
-
-    def copy(self):
-        """Create an identical (deep) copy of this vector.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        copy : `NumpyNtuplesVector`
-            The deep copy
-
-        Examples
-        --------
-        >>> vec1 = NumpyNtuples(3, 'int').element([1, 2, 3])
-        >>> vec2 = vec1.copy()
-        >>> vec2
-        ntuples(3, 'int').element([1, 2, 3])
-        >>> vec1 == vec2
-        True
-        >>> vec1 is vec2
-        False
-        """
-        return self.space.element(self.data.copy())
-
-    def __getitem__(self, indices):
-        """Access values of this vector.
-
-        Parameters
-        ----------
-        indices : int or `slice`
-            The position(s) that should be accessed
-
-        Returns
-        -------
-        values : scalar or `NumpyNtuplesVector`
-            The value(s) at the index (indices)
-
-        Examples
-        --------
-        >>> str_3 = NumpyNtuples(3, dtype='U6')  # 6-char unicode
-        >>> x = str_3.element(['a', 'Hello!', '0'])
-        >>> print(x[0])
-        a
-        >>> print(x[1:3])
-        [Hello!, 0]
-        >>> x[1:3].space
-        ntuples(2, '<U6')
-        """
-        if isinstance(indices, Integral):
-            return self.data[indices]  # single index
-        else:
-            arr = self.data[indices]
-            return type(self.space)(len(arr), dtype=self.dtype).element(arr)
-
-    def __setitem__(self, indices, values):
-        """Set values of this vector.
-
-        Parameters
-        ----------
-        indices : int or `slice`
-            The position(s) that should be set
-        values : scalar or `array-like`
-            The value(s) that are to be assigned.
-
-            If ``indices`` is an integer, ``value`` must be scalar.
-
-            If ``indices`` is a slice, ``value`` must be
-            broadcastable to the size of the slice (same size,
-            shape ``(1,)`` or single value).
-
-        Returns
-        -------
-        None
-
-        Examples
-        --------
-        >>> int_3 = NumpyNtuples(3, 'int')
-        >>> x = int_3.element([1, 2, 3])
-        >>> x[0] = 5
-        >>> x
-        ntuples(3, 'int').element([5, 2, 3])
-
-        Assignment from array-like structures or another
-        vector:
-
-        >>> y = NumpyNtuples(2, 'short').element([-1, 2])
-        >>> x[:2] = y
-        >>> x
-        ntuples(3, 'int').element([-1, 2, 3])
-        >>> x[1:3] = [7, 8]
-        >>> x
-        ntuples(3, 'int').element([-1, 7, 8])
-        >>> x[:] = np.array([0, 0, 0])
-        >>> x
-        ntuples(3, 'int').element([0, 0, 0])
-
-        Broadcasting is also supported:
-
-        >>> x[1:3] = -2.
-        >>> x
-        ntuples(3, 'int').element([0, -2, -2])
-
-        Array views are preserved:
-
-        >>> y = x[::2]  # view into x
-        >>> y[:] = -9
-        >>> print(y)
-        [-9, -9]
-        >>> print(x)
-        [-9, -2, -9]
-
-        Be aware of unsafe casts and over-/underflows, there
-        will be warnings at maximum.
-
-        >>> x = NumpyNtuples(2, 'int8').element([0, 0])
-        >>> maxval = 255  # maximum signed 8-bit unsigned int
-        >>> x[0] = maxval + 1
-        >>> x
-        ntuples(2, 'int8').element([0, 0])
-        """
-        if isinstance(values, NumpyNtuplesVector):
-            self.data[indices] = values.data
-        else:
-            self.data[indices] = values
-
-    @property
-    def ufuncs(self):
-        """`NumpyNtuplesUfuncs`, access to numpy style ufuncs.
-
-        Examples
-        --------
-        >>> r2 = NumpyFn(2)
-        >>> x = r2.element([1, -2])
-        >>> x.ufuncs.absolute()
-        rn(2).element([1.0, 2.0])
-
-        These functions can also be used with broadcasting
-
-        >>> x.ufuncs.add(3)
-        rn(2).element([4.0, 1.0])
-
-        and non-space elements
-
-        >>> x.ufuncs.subtract([3, 3])
-        rn(2).element([-2.0, -5.0])
-
-        There is also support for various reductions (sum, prod, min, max)
-
-        >>> x.ufuncs.sum()
-        -1.0
-
-        They also support an out parameter
-
-        >>> y = r2.element([3, 4])
-        >>> out = r2.element()
-        >>> result = x.ufuncs.add(y, out=out)
-        >>> result
-        rn(2).element([4.0, 2.0])
-        >>> result is out
-        True
-
-        Notes
-        -----
-        These are optimized for use with ntuples and incur no overhead.
-        """
-        return NumpyNtuplesUfuncs(self)
-
-
-def _blas_is_applicable(*args):
-    """Whether BLAS routines can be applied or not.
-
-    BLAS routines are available for single and double precision
-    float or complex data only. If the arrays are non-contiguous,
-    BLAS methods are usually slower, and array-writing routines do
-    not work at all. Hence, only contiguous arrays are allowed.
-
-    Parameters
-    ----------
-    x1,...,xN : `NtuplesBaseVector`
-        The vectors to be tested for BLAS conformity
-    """
-    return (all(x.dtype == args[0].dtype and
-                x.dtype in _BLAS_DTYPES and
-                x.data.flags.contiguous
-                for x in args))
-
-
-def _lincomb_impl(a, x1, b, x2, out, dtype):
-    """Raw linear combination depending on data type."""
-    # Convert to native since BLAS needs it
-    size = native(x1.size)
-
-    # Shortcut for small problems
-    if size <= THRESHOLD_SMALL:  # small array optimization
-        out.data[:] = a * x1.data + b * x2.data
-        return
-
-    # If data is very big, use BLAS if possible
-    if size > THRESHOLD_MEDIUM and _blas_is_applicable(x1, x2, out):
-        axpy, scal, copy = linalg.blas.get_blas_funcs(
-            ['axpy', 'scal', 'copy'], arrays=(x1.data, x2.data, out.data))
-    else:
-        # Use fallbacks otherwise
-        def fallback_axpy(x1, x2, n, a):
-            """Fallback axpy implementation avoiding copy."""
-            if a != 0:
-                x2 /= a
-                x2 += x1
-                x2 *= a
-            return x2
-
-        def fallback_scal(a, x, n):
-            """Fallback scal implementation."""
-            x *= a
-            return x
-
-        def fallback_copy(x1, x2, n):
-            """Fallback copy implementation."""
-            x2[...] = x1[...]
-            return x2
-
-        axpy, scal, copy = (fallback_axpy, fallback_scal, fallback_copy)
-
-    if x1 is x2 and b != 0:
-        # x1 is aligned with x2 -> out = (a+b)*x1
-        _lincomb_impl(a + b, x1, 0, x1, out, dtype)
-    elif out is x1 and out is x2:
-        # All the vectors are aligned -> out = (a+b)*out
-        scal(a + b, out.data, size)
-    elif out is x1:
-        # out is aligned with x1 -> out = a*out + b*x2
-        if a != 1:
-            scal(a, out.data, size)
-        if b != 0:
-            axpy(x2.data, out.data, size, b)
-    elif out is x2:
-        # out is aligned with x2 -> out = a*x1 + b*out
-        if b != 1:
-            scal(b, out.data, size)
-        if a != 0:
-            axpy(x1.data, out.data, size, a)
-    else:
-        # We have exhausted all alignment options, so x1 != x2 != out
-        # We now optimize for various values of a and b
-        if b == 0:
-            if a == 0:  # Zero assignment -> out = 0
-                out.data[:] = 0
-            else:  # Scaled copy -> out = a*x1
-                copy(x1.data, out.data, size)
-                if a != 1:
-                    scal(a, out.data, size)
-        else:
-            if a == 0:  # Scaled copy -> out = b*x2
-                copy(x2.data, out.data, size)
-                if b != 1:
-                    scal(b, out.data, size)
-
-            elif a == 1:  # No scaling in x1 -> out = x1 + b*x2
-                copy(x1.data, out.data, size)
-                axpy(x2.data, out.data, size, b)
-            else:  # Generic case -> out = a*x1 + b*x2
-                copy(x2.data, out.data, size)
-                if b != 1:
-                    scal(b, out.data, size)
-                axpy(x1.data, out.data, size, a)
-
-
-class NumpyFn(FnBase, NumpyNtuples):
-
-    """Vector space F^n with vector multiplication.
-
-    This space implements n-tuples of elements from a `Field` ``F``,
-    which is usually the real or complex numbers.
+    This space implements n-tuples of elements from a `Field`, which is
+    usually the real or complex numbers.
 
     Its elements are represented as instances of the `NumpyFnVector` class.
     """
+
+    impl = 'numpy'
 
     def __init__(self, size, dtype='float64', **kwargs):
         """Initialize a new instance.
@@ -699,8 +184,13 @@ class NumpyFn(FnBase, NumpyNtuples):
         rn(3, weighting=[1, 2, 3])
         """
         # TODO: fix dead link `scipy.sparse.spmatrix`
-        NumpyNtuples.__init__(self, size, dtype)
-        FnBase.__init__(self, size, dtype)
+        if sys.version_info.major < 3 and dtype is builtins.int:
+            raise TypeError('cannot use `builtins.int` as `dtype` since '
+                            'Numpy does not recognize it as int')
+
+        if np.dtype(dtype).char not in self.available_dtypes():
+            raise ValueError('`dtype` {!r} not supported'.format(dtype))
+        super(NumpyFn, self).__init__(size, dtype)
 
         dist = kwargs.pop('dist', None)
         norm = kwargs.pop('norm', None)
@@ -773,6 +263,101 @@ class NumpyFn(FnBase, NumpyNtuples):
         """``True`` if the weighting is not `NumpyFnNoWeighting`."""
         return not isinstance(self.weighting, NumpyFnNoWeighting)
 
+    def element(self, inp=None, data_ptr=None):
+        """Create a new element.
+
+        Parameters
+        ----------
+        inp : `array-like`, optional
+            Input to initialize the new element.
+
+            If ``inp`` is ``None``, an empty element is created with no
+            guarantee of its state (memory allocation only).
+
+            If ``inp`` is a `numpy.ndarray` of shape ``(size,)``
+            and the same data type as this space, the array is wrapped,
+            not copied.
+            Other `array-like` objects are copied.
+
+        Returns
+        -------
+        element : `NumpyFnVector`
+            The new element created (from ``inp``).
+
+        Notes
+        -----
+        This method preserves "array views" of correct size and type,
+        see the examples below.
+
+        Examples
+        --------
+        >>> bool3 = odl.fn(3, dtype=bool)
+        >>> x = bool3.element([True, True, False])
+        >>> x
+        fn(3, 'bool').element([ True,  True, False])
+        >>> x.space
+        fn(3, 'bool')
+
+        Construction from data pointer:
+
+        >>> int3 = odl.fn(3, dtype='int')
+        >>> x = int3.element([1, 2, 3])
+        >>> y = int3.element(data_ptr=x.data_ptr)
+        >>> print(y)
+        [1, 2, 3]
+        >>> y[0] = 5
+        >>> print(x)
+        [5, 2, 3]
+        """
+        if inp is None:
+            if data_ptr is None:
+                arr = np.empty(self.size, dtype=self.dtype)
+                return self.element_type(self, arr)
+            else:
+                ctype_array_def = ctypes.c_byte * (self.size *
+                                                   self.dtype.itemsize)
+                as_ctype_array = ctype_array_def.from_address(data_ptr)
+                as_numpy_array = np.ctypeslib.as_array(as_ctype_array)
+                arr = as_numpy_array.view(dtype=self.dtype)
+                return self.element_type(self, arr)
+        else:
+            if data_ptr is None:
+                if inp in self:
+                    return inp
+                else:
+                    arr = np.array(inp, copy=False, dtype=self.dtype, ndmin=1)
+                    if arr.shape != (self.size,):
+                        raise ValueError('expected input shape {}, got {}'
+                                         ''.format((self.size,), arr.shape))
+
+                    return self.element_type(self, arr)
+            else:
+                raise ValueError('cannot provide both `inp` and `data_ptr`')
+
+    def zero(self):
+        """Create a vector of zeros.
+
+        Examples
+        --------
+        >>> r3 = odl.rn(3)
+        >>> x = r3.zero()
+        >>> x
+        rn(3).element([ 0.,  0.,  0.])
+        """
+        return self.element(np.zeros(self.size, dtype=self.dtype))
+
+    def one(self):
+        """Create a vector of ones.
+
+        Examples
+        --------
+        >>> r3 = odl.rn(3)
+        >>> x = r3.one()
+        >>> x
+        rn(3).element([ 1.,  1.,  1.])
+        """
+        return self.element(np.ones(self.size, dtype=self.dtype))
+
     def _lincomb(self, a, x1, b, x2, out):
         """Linear combination of ``x1`` and ``x2``.
 
@@ -799,9 +384,9 @@ class NumpyFn(FnBase, NumpyNtuples):
         >>> y = c3.element([4+0j, 5, 6+0.5j])
         >>> out = c3.element()
         >>> c3.lincomb(2j, x, 3-1j, y, out)  # out is returned
-        cn(3).element([(10-2j), (17-1j), (18.5+1.5j)])
+        cn(3).element([ 10.0-2.j ,  17.0-1.j ,  18.5+1.5j])
         >>> out
-        cn(3).element([(10-2j), (17-1j), (18.5+1.5j)])
+        cn(3).element([ 10.0-2.j ,  17.0-1.j ,  18.5+1.5j])
         """
         _lincomb_impl(a, x1, b, x2, out, self.dtype)
 
@@ -940,9 +525,9 @@ class NumpyFn(FnBase, NumpyNtuples):
         >>> y = c3.element([1, 2+1j, 3-1j])
         >>> out = c3.element()
         >>> c3.multiply(x, y, out)  # out is returned
-        cn(3).element([(5+1j), (6+3j), (4-8j)])
+        cn(3).element([ 5.+1.j,  6.+3.j,  4.-8.j])
         >>> out
-        cn(3).element([(5+1j), (6+3j), (4-8j)])
+        cn(3).element([ 5.+1.j,  6.+3.j,  4.-8.j])
         """
         np.multiply(x1.data, x2.data, out=out.data)
 
@@ -967,9 +552,9 @@ class NumpyFn(FnBase, NumpyNtuples):
         >>> y = r3.element([1, 2, 2])
         >>> out = r3.element()
         >>> r3.divide(x, y, out)  # out is returned
-        rn(3).element([3.0, 2.5, 3.0])
+        rn(3).element([ 3. ,  2.5,  3. ])
         >>> out
-        rn(3).element([3.0, 2.5, 3.0])
+        rn(3).element([ 3. ,  2.5,  3. ])
         """
         np.divide(x1.data, x2.data, out=out.data)
 
@@ -1023,39 +608,12 @@ class NumpyFn(FnBase, NumpyNtuples):
         if other is self:
             return True
 
-        return (NumpyNtuples.__eq__(self, other) and
+        return (super(NumpyFn, self).__eq__(other) and
                 self.weighting == other.weighting)
 
     def __hash__(self):
         """Return ``hash(self)``."""
-        return NumpyNtuples.__hash__(self) ^ hash(self.weighting)
-
-    def __repr__(self):
-        """Return ``repr(self)``."""
-        if self.is_rn:
-            constructor_name = 'rn'
-        elif self.is_cn:
-            constructor_name = 'cn'
-        else:
-            constructor_name = 'fn'
-
-        inner_str = '{}'.format(self.size)
-        if self.dtype != self.default_dtype(self.field):
-            inner_str += ', {}'.format(dtype_repr(self.dtype))
-
-        weight_str = self.weighting.repr_part
-        if weight_str:
-            inner_str += ', ' + weight_str
-        return '{}({})'.format(constructor_name, inner_str)
-
-    # Copy these to handle bug in ABCmeta
-    zero = NumpyNtuples.zero
-    one = NumpyNtuples.one
-
-    @property
-    def element_type(self):
-        """`NumpyFnVector`"""
-        return NumpyFnVector
+        return hash((super(NumpyFn, self).__hash__(), self.weighting))
 
     @staticmethod
     def available_dtypes():
@@ -1063,13 +621,17 @@ class NumpyFn(FnBase, NumpyNtuples):
 
         Notes
         -----
-        This is the set of all arithmetic dtypes available to numpy. See
-        `numpy.sctypes` for more information.
+        This is all dtypes available to numpy. See ``numpy.sctypes``
+        for more information.
 
         The available dtypes may depend on the specific system used.
         """
-        # TODO: fix dead link `numpy.sctypes`
-        return np.sctypes['int'] + np.sctypes['float'] + np.sctypes['complex']
+        all_dtypes = []
+        for lst in np.sctypes.values():
+            all_dtypes.extend(set(lst))
+        dtypes = [np.dtype(dtype) for dtype in all_dtypes]
+        dtypes.remove(np.dtype('void'))
+        return tuple(dtypes)
 
     @staticmethod
     def default_dtype(field=None):
@@ -1099,15 +661,314 @@ class NumpyFn(FnBase, NumpyNtuples):
             raise ValueError('no default data type defined for field {}.'
                              ''.format(field))
 
+    def __repr__(self):
+        """Return ``repr(self)``."""
+        if self.is_real:
+            constructor_name = 'rn'
+        elif self.is_complex:
+            constructor_name = 'cn'
+        else:
+            constructor_name = 'fn'
 
-class NumpyFnVector(FnBaseVector, NumpyNtuplesVector):
+        inner_str = '{}'.format(self.size)
+        if self.dtype != self.default_dtype(self.field):
+            inner_str += ', {}'.format(dtype_repr(self.dtype))
+
+        weight_str = self.weighting.repr_part
+        if weight_str:
+            inner_str += ', ' + weight_str
+        return '{}({})'.format(constructor_name, inner_str)
+
+    @property
+    def element_type(self):
+        """`NumpyFnVector`"""
+        return NumpyFnVector
+
+
+class NumpyFnVector(FnBaseVector):
 
     """Representation of an `NumpyFn` element."""
 
     def __init__(self, space, data):
         """Initialize a new instance."""
-        FnBaseVector.__init__(self, space)
-        NumpyNtuplesVector.__init__(self, space, data)
+        super(NumpyFnVector, self).__init__(space)
+        self.__data = data
+
+    @property
+    def data(self):
+        """Raw Numpy array representing the data."""
+        return self.__data
+
+    def asarray(self, start=None, stop=None, step=None, out=None):
+        """Extract the data of this array as a numpy array.
+
+        Parameters
+        ----------
+        start : int, optional
+            Start position. ``None`` means the first element.
+        stop : int, optional
+            One element past the last element to be extracted.
+            ``None`` means the last element.
+        step : int, optional
+            Step length. ``None`` is equivalent to 1.
+        out : `numpy.ndarray`, optional
+            Array to which the result should be written.
+            Has to be contiguous and of the correct data type.
+
+        Returns
+        -------
+        asarray : `numpy.ndarray`
+            Numpy array of the same type as the space.
+
+        Examples
+        --------
+        >>> import ctypes
+        >>> vec = odl.fn(3, 'float').element([1, 2, 3])
+        >>> vec.asarray()
+        array([ 1.,  2.,  3.])
+        >>> vec.asarray(start=1, stop=3)
+        array([ 2.,  3.])
+
+        Using the out parameter
+
+        >>> out = np.empty((3,), dtype='float')
+        >>> result = vec.asarray(out=out)
+        >>> out
+        array([ 1.,  2.,  3.])
+        >>> result is out
+        True
+        """
+        if out is None:
+            return self.data[start:stop:step]
+        else:
+            out[:] = self.data[start:stop:step]
+            return out
+
+    @property
+    def data_ptr(self):
+        """A raw pointer to the data container.
+
+        Examples
+        --------
+        >>> import ctypes
+        >>> vec = odl.fn(3, 'int32').element([1, 2, 3])
+        >>> arr_type = ctypes.c_int32 * 3
+        >>> buffer = arr_type.from_address(vec.data_ptr)
+        >>> arr = np.frombuffer(buffer, dtype='int32')
+        >>> print(arr)
+        [1 2 3]
+
+        In-place modification via pointer:
+
+        >>> arr[0] = 5
+        >>> print(vec)
+        [5, 2, 3]
+        """
+        return self.data.ctypes.data
+
+    def __eq__(self, other):
+        """Return ``self == other``.
+
+        Returns
+        -------
+        equals : bool
+            ``True`` if all entries of other are equal to this
+            vector's entries, ``False`` otherwise.
+
+        Notes
+        -----
+        Space membership is not checked, hence vectors from
+        different spaces can be equal.
+
+        Examples
+        --------
+        >>> vec1 = odl.fn(3, int).element([1, 2, 3])
+        >>> vec2 = odl.fn(3, int).element([-1, 2, 0])
+        >>> vec1 == vec2
+        False
+        >>> vec2 = odl.fn(3, int).element([1, 2, 3])
+        >>> vec1 == vec2
+        True
+
+        Space membership matters:
+
+        >>> vec2 = odl.fn(3, float).element([1, 2, 3])
+        >>> vec1 == vec2 or vec2 == vec1
+        False
+        """
+        if other is self:
+            return True
+        elif other not in self.space:
+            return False
+        else:
+            return np.array_equal(self.data, other.data)
+
+    def copy(self):
+        """Create an identical (deep) copy of this vector.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        copy : `NumpyFnVector`
+            The deep copy
+
+        Examples
+        --------
+        >>> vec1 = odl.fn(3, 'int').element([1, 2, 3])
+        >>> vec2 = vec1.copy()
+        >>> vec2
+        fn(3, 'int').element([1, 2, 3])
+        >>> vec1 == vec2
+        True
+        >>> vec1 is vec2
+        False
+        """
+        return self.space.element(self.data.copy())
+
+    def __getitem__(self, indices):
+        """Access values of this vector.
+
+        Parameters
+        ----------
+        indices : int or `slice`
+            The position(s) that should be accessed
+
+        Returns
+        -------
+        values : scalar or `NumpyFnVector`
+            The value(s) at the index (indices)
+
+        Examples
+        --------
+        >>> bool3 = odl.fn(4, dtype=bool)
+        >>> x = bool3.element([True, False, True, True])
+        >>> x[0]
+        True
+        >>> x[1:3]
+        fn(2, 'bool').element([False,  True])
+        """
+        if isinstance(indices, Integral):
+            return self.data[indices]  # single index
+        else:
+            arr = self.data[indices]
+            return type(self.space)(len(arr), dtype=self.dtype).element(arr)
+
+    def __setitem__(self, indices, values):
+        """Set values of this vector.
+
+        Parameters
+        ----------
+        indices : int or `slice`
+            The position(s) that should be set
+        values : scalar or `array-like`
+            The value(s) that are to be assigned.
+
+            If ``indices`` is an integer, ``value`` must be scalar.
+
+            If ``indices`` is a slice, ``value`` must be
+            broadcastable to the size of the slice (same size,
+            shape ``(1,)`` or single value).
+
+        Returns
+        -------
+        None
+
+        Examples
+        --------
+        >>> int_3 = odl.fn(3, 'int')
+        >>> x = int_3.element([1, 2, 3])
+        >>> x[0] = 5
+        >>> x
+        fn(3, 'int').element([5, 2, 3])
+
+        Assignment from array-like structures or another
+        vector:
+
+        >>> y = odl.fn(2, 'short').element([-1, 2])
+        >>> x[:2] = y
+        >>> x
+        fn(3, 'int').element([-1, 2, 3])
+        >>> x[1:3] = [7, 8]
+        >>> x
+        fn(3, 'int').element([-1, 7, 8])
+        >>> x[:] = np.array([0, 0, 0])
+        >>> x
+        fn(3, 'int').element([0, 0, 0])
+
+        Broadcasting is also supported:
+
+        >>> x[1:3] = -2.
+        >>> x
+        fn(3, 'int').element([ 0, -2, -2])
+
+        Array views are preserved:
+
+        >>> y = x[::2]  # view into x
+        >>> y[:] = -9
+        >>> print(y)
+        [-9, -9]
+        >>> print(x)
+        [-9, -2, -9]
+
+        Be aware of unsafe casts and over-/underflows, there
+        will be warnings at maximum.
+
+        >>> x = odl.fn(2, 'int8').element([0, 0])
+        >>> maxval = 255  # maximum signed 8-bit unsigned int
+        >>> x[0] = maxval + 1
+        >>> x
+        fn(2, 'int8').element([0, 0])
+        """
+        if isinstance(values, NumpyFnVector):
+            self.data[indices] = values.data
+        else:
+            self.data[indices] = values
+
+    @property
+    def ufuncs(self):
+        """`NumpyFnUfuncs`, access to numpy style ufuncs.
+
+        Examples
+        --------
+        >>> r2 = NumpyFn(2)
+        >>> x = r2.element([1, -2])
+        >>> x.ufuncs.absolute()
+        rn(2).element([ 1.,  2.])
+
+        These functions can also be used with broadcasting
+
+        >>> x.ufuncs.add(3)
+        rn(2).element([ 4.,  1.])
+
+        and non-space elements
+
+        >>> x.ufuncs.subtract([3, 3])
+        rn(2).element([-2., -5.])
+
+        There is also support for various reductions (sum, prod, min, max)
+
+        >>> x.ufuncs.sum()
+        -1.0
+
+        They also support an out parameter
+
+        >>> y = r2.element([3, 4])
+        >>> out = r2.element()
+        >>> result = x.ufuncs.add(y, out=out)
+        >>> result
+        rn(2).element([ 4.,  2.])
+        >>> result is out
+        True
+
+        Notes
+        -----
+        These are optimized for use with ``NumpyFnVector`` objects and
+        incur no overhead.
+        """
+        return NumpyFnUfuncs(self)
 
     @property
     def real(self):
@@ -1120,17 +981,16 @@ class NumpyFnVector(FnBaseVector, NumpyNtuplesVector):
 
         Examples
         --------
-        >>> c3 = NumpyFn(3, dtype=complex)
-        >>> x = c3.element([5+1j, 3, 2-2j])
+        >>> x = odl.cn(3).element([5+1j, 3, 2-2j])
         >>> x.real
-        rn(3).element([5.0, 3.0, 2.0])
+        rn(3).element([ 5.,  3.,  2.])
 
-        The `rn` vector is really a view, so changes affect
+        The `real` vector is really a view, so changes affect
         the original array:
 
         >>> x.real *= 2
         >>> x
-        cn(3).element([(10+1j), (6+0j), (4-2j)])
+        cn(3).element([ 10.+1.j,   6.+0.j,   4.-2.j])
         """
         return self.space.real_space.element(self.data.real)
 
@@ -1147,21 +1007,20 @@ class NumpyFnVector(FnBaseVector, NumpyNtuplesVector):
 
         Examples
         --------
-        >>> c3 = NumpyFn(3, dtype=complex)
-        >>> x = c3.element([5+1j, 3, 2-2j])
-        >>> a = NumpyFn(3).element([0, 0, 0])
+        >>> x = odl.cn(3).element([5+1j, 3, 2-2j])
+        >>> a = odl.rn(3).element([0, 0, 0])
         >>> x.real = a
         >>> x
-        cn(3).element([1j, 0j, -2j])
+        cn(3).element([ 0.+1.j,  0.+0.j,  0.-2.j])
 
         Other array-like types and broadcasting:
 
         >>> x.real = 1.0
         >>> x
-        cn(3).element([(1+1j), (1+0j), (1-2j)])
+        cn(3).element([ 1.+1.j,  1.+0.j,  1.-2.j])
         >>> x.real = [0, 2, -1]
         >>> x
-        cn(3).element([1j, (2+0j), (-1-2j)])
+        cn(3).element([ 0.+1.j,  2.+0.j, -1.-2.j])
         """
         self.real.data[:] = newreal
 
@@ -1176,17 +1035,16 @@ class NumpyFnVector(FnBaseVector, NumpyNtuplesVector):
 
         Examples
         --------
-        >>> c3 = NumpyFn(3, dtype=complex)
-        >>> x = c3.element([5+1j, 3, 2-2j])
+        >>> x = odl.cn(3).element([5+1j, 3, 2-2j])
         >>> x.imag
-        rn(3).element([1.0, 0.0, -2.0])
+        rn(3).element([ 1.,  0., -2.])
 
-        The `rn` vector is really a view, so changes affect
+        The `imag` vector is really a view, so changes affect
         the original array:
 
         >>> x.imag *= 2
         >>> x
-        cn(3).element([(5+2j), (3+0j), (2-4j)])
+        cn(3).element([ 5.+2.j,  3.+0.j,  2.-4.j])
         """
         return self.space.real_space.element(self.data.imag)
 
@@ -1203,17 +1061,20 @@ class NumpyFnVector(FnBaseVector, NumpyNtuplesVector):
 
         Examples
         --------
-        >>> x = cn(3).element([5+1j, 3, 2-2j])
-        >>> a = NumpyFn(3).element([0, 0, 0])
-        >>> x.imag = a; print(x)
-        [(5+0j), (3+0j), (2+0j)]
+        >>> x = odl.cn(3).element([5+1j, 3, 2-2j])
+        >>> a = odl.rn(3).element([0, 0, 0])
+        >>> x.imag = a
+        >>> x
+        cn(3).element([ 5.+0.j,  3.+0.j,  2.+0.j])
 
         Other array-like types and broadcasting:
 
-        >>> x.imag = 1.0; print(x)
-        [(5+1j), (3+1j), (2+1j)]
-        >>> x.imag = [0, 2, -1]; print(x)
-        [(5+0j), (3+2j), (2-1j)]
+        >>> x.imag = 1.0
+        >>> x
+        cn(3).element([ 5.+1.j,  3.+1.j,  2.+1.j])
+        >>> x.imag = [0, 2, -1]
+        >>> x
+        cn(3).element([ 5.+0.j,  3.+2.j,  2.-1.j])
         """
         self.imag.data[:] = newimag
 
@@ -1234,22 +1095,26 @@ class NumpyFnVector(FnBaseVector, NumpyNtuplesVector):
 
         Examples
         --------
-        >>> x = NumpyFn(3, dtype=complex).element([5+1j, 3, 2-2j])
-        >>> y = x.conj(); print(y)
-        [(5-1j), (3-0j), (2+2j)]
+        Default usage:
 
-        The out parameter allows you to avoid a copy
+        >>> x = odl.cn(3).element([5+1j, 3, 2-2j])
+        >>> x.conj()
+        cn(3).element([ 5.-1.j,  3.-0.j,  2.+2.j])
 
-        >>> z = NumpyFn(3, dtype=complex).element()
-        >>> z_out = x.conj(out=z); print(z)
-        [(5-1j), (3-0j), (2+2j)]
+        The out parameter allows you to avoid a copy:
+
+        >>> z = odl.cn(3).element()
+        >>> z_out = x.conj(out=z)
+        >>> z
+        cn(3).element([ 5.-1.j,  3.-0.j,  2.+2.j])
         >>> z_out is z
         True
 
-        It can also be used for in-place conj
+        It can also be used for in-place conjugation:
 
-        >>> x_out = x.conj(out=x); print(x)
-        [(5-1j), (3-0j), (2+2j)]
+        >>> x_out = x.conj(out=x)
+        >>> x
+        cn(3).element([ 5.-1.j,  3.-0.j,  2.+2.j])
         >>> x_out is x
         True
         """
@@ -2005,6 +1870,111 @@ class NumpyFnCustomDist(CustomDist):
             - ``dist(x, y) <= dist(x, z) + dist(z, y)``
         """
         super(NumpyFnCustomDist, self).__init__(dist, impl='numpy')
+
+
+# --- Auxiliary functions --- #
+
+
+def _blas_is_applicable(*args):
+    """Whether BLAS routines can be applied or not.
+
+    BLAS routines are available for single and double precision
+    float or complex data only. If the arrays are non-contiguous,
+    BLAS methods are usually slower, and array-writing routines do
+    not work at all. Hence, only contiguous arrays are allowed.
+    Furthermore, BLAS uses 32-bit integers internally for indexing,
+    which makes it unusable for arrays lager than ``2 ** 31 - 1``.
+
+    Parameters
+    ----------
+    x1,...,xN : `NtuplesBaseVector`
+        The vectors to be tested for BLAS conformity
+    """
+    return (all(x.dtype == args[0].dtype and
+                x.dtype in _BLAS_DTYPES and
+                x.data.flags.contiguous and
+                x.size <= np.iinfo('int32').max
+                for x in args))
+
+
+def _lincomb_impl(a, x1, b, x2, out, dtype):
+    """Raw linear combination depending on data type."""
+    # Convert to native since BLAS needs it
+    size = native(x1.size)
+
+    # Shortcut for small problems
+    if size <= THRESHOLD_SMALL:  # small array optimization
+        out.data[:] = a * x1.data + b * x2.data
+        return
+
+    # If data is very big, use BLAS if possible
+    if size > THRESHOLD_MEDIUM and _blas_is_applicable(x1, x2, out):
+        axpy, scal, copy = linalg.blas.get_blas_funcs(
+            ['axpy', 'scal', 'copy'], arrays=(x1.data, x2.data, out.data))
+    else:
+        # Use fallbacks otherwise
+        def fallback_axpy(x1, x2, n, a):
+            """Fallback axpy implementation avoiding copy."""
+            if a != 0:
+                x2 /= a
+                x2 += x1
+                x2 *= a
+            return x2
+
+        def fallback_scal(a, x, n):
+            """Fallback scal implementation."""
+            x *= a
+            return x
+
+        def fallback_copy(x1, x2, n):
+            """Fallback copy implementation."""
+            x2[...] = x1[...]
+            return x2
+
+        axpy, scal, copy = (fallback_axpy, fallback_scal, fallback_copy)
+
+    if x1 is x2 and b != 0:
+        # x1 is aligned with x2 -> out = (a+b)*x1
+        _lincomb_impl(a + b, x1, 0, x1, out, dtype)
+    elif out is x1 and out is x2:
+        # All the vectors are aligned -> out = (a+b)*out
+        scal(a + b, out.data, size)
+    elif out is x1:
+        # out is aligned with x1 -> out = a*out + b*x2
+        if a != 1:
+            scal(a, out.data, size)
+        if b != 0:
+            axpy(x2.data, out.data, size, b)
+    elif out is x2:
+        # out is aligned with x2 -> out = a*x1 + b*out
+        if b != 1:
+            scal(b, out.data, size)
+        if a != 0:
+            axpy(x1.data, out.data, size, a)
+    else:
+        # We have exhausted all alignment options, so x1 != x2 != out
+        # We now optimize for various values of a and b
+        if b == 0:
+            if a == 0:  # Zero assignment -> out = 0
+                out.data[:] = 0
+            else:  # Scaled copy -> out = a*x1
+                copy(x1.data, out.data, size)
+                if a != 1:
+                    scal(a, out.data, size)
+        else:
+            if a == 0:  # Scaled copy -> out = b*x2
+                copy(x2.data, out.data, size)
+                if b != 1:
+                    scal(b, out.data, size)
+
+            elif a == 1:  # No scaling in x1 -> out = x1 + b*x2
+                copy(x1.data, out.data, size)
+                axpy(x2.data, out.data, size, b)
+            else:  # Generic case -> out = a*x1 + b*x2
+                copy(x2.data, out.data, size)
+                if b != 1:
+                    scal(b, out.data, size)
+                axpy(x1.data, out.data, size, a)
 
 
 if __name__ == '__main__':
