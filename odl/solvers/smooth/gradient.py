@@ -107,7 +107,7 @@ def steepest_descent(f, x, line_search=1.0, maxiter=1000, tol=1e-16,
             callback(x)
 
 
-def adam(f, x, learning_rate=1e-3, beta1=0.9, beta2=0.999, eps=1e-8,
+def adam(f, x, learning_rate=1e-4, beta1=0.9, beta2=0.999, eps=1e-8,
          maxiter=1000, tol=1e-16, callback=None):
     """ADAM method to minimize an objective function.
 
@@ -165,18 +165,19 @@ def adam(f, x, learning_rate=1e-3, beta1=0.9, beta2=0.999, eps=1e-8,
     v = grad.domain.zero()
 
     grad_x = grad.range.element()
-    for _ in range(maxiter):
+    for t in range(1, maxiter + 1):
         grad(x, out=grad_x)
 
         if grad_x.norm() < tol:
-            return
+             return
 
         m.lincomb(beta1, m, 1 - beta1, grad_x)
         v.lincomb(beta2, v, 1 - beta2, grad_x ** 2)
 
-        step = learning_rate * np.sqrt(1 - beta2) / (1 - beta1)
+        step = learning_rate * np.sqrt(1 - beta2 ** t) / (1 - beta1 ** t)
+        eps_hat = eps * np.sqrt(1 - beta2 ** t) / (1 - beta1 ** t)
 
-        x.lincomb(1, x, -step, m / (np.sqrt(v) + eps))
+        x.lincomb(1, x, -step, m / (np.sqrt(v) + eps_hat))
 
         if callback is not None:
             callback(x)
