@@ -1,4 +1,5 @@
-# Copyright 2014-2018 The ODL contributors
+# coding: utf-8
+# Copyright 2014-2019 The ODL contributors
 #
 # This file is part of ODL.
 #
@@ -76,23 +77,24 @@ def _fbp_filter(norm_freq, filter_type, frequency_scaling):
     ...                    filter_type='Hann',
     ...                    frequency_scaling=0.8)
     """
+    filter_type, filter_type_in = str(filter_type).lower(), filter_type
     if callable(filter_type):
         filt = filter_type(norm_freq)
-    elif filter_type == 'Ram-Lak':
+    elif filter_type == 'ram-lak':
         filt = np.copy(norm_freq)
-    elif filter_type == 'Shepp-Logan':
+    elif filter_type == 'shepp-logan':
         filt = norm_freq * np.sinc(norm_freq / (2 * frequency_scaling))
-    elif filter_type == 'Cosine':
+    elif filter_type == 'cosine':
         filt = norm_freq * np.cos(norm_freq * np.pi / (2 * frequency_scaling))
-    elif filter_type == 'Hamming':
+    elif filter_type == 'hamming':
         filt = norm_freq * (
             0.54 + 0.46 * np.cos(norm_freq * np.pi / (frequency_scaling)))
-    elif filter_type == 'Hann':
+    elif filter_type == 'hann':
         filt = norm_freq * (
             np.cos(norm_freq * np.pi / (2 * frequency_scaling)) ** 2)
     else:
         raise ValueError('unknown `filter_type` ({})'
-                         ''.format(filter_type))
+                         ''.format(filter_type_in))
 
     indicator = (norm_freq <= frequency_scaling)
     filt *= indicator
@@ -140,7 +142,7 @@ def tam_danielson_window(ray_trafo, smoothing_width=0.05, n_pi=1):
     Physics in Medicine & Biology 4 (1998), p 1015.
     https://dx.doi.org/10.1088/0031-9155/43/4/028
 
-    [PKGT2000] Proksa R1, Köhler T, Grass M, Timmer J.
+    [PKGT2000] Proksa R, Köhler T, Grass M, Timmer J.
     *The n-PI-method for helical cone-beam CT*
     IEEE Trans Med Imaging. 2000 Sep;19(9):848-63.
     https://www.ncbi.nlm.nih.gov/pubmed/11127600
@@ -166,15 +168,15 @@ def tam_danielson_window(ray_trafo, smoothing_width=0.05, n_pi=1):
     rot_dir = _rotation_direction_in_detector(ray_trafo.geometry)
 
     # Find distance from projection of rotation axis for each pixel
-    dx = (rot_dir[0] * ray_trafo.range.meshgrid[1] +
-          rot_dir[1] * ray_trafo.range.meshgrid[2])
+    dx = (rot_dir[0] * ray_trafo.range.meshgrid[1]
+          + rot_dir[1] * ray_trafo.range.meshgrid[2])
 
     dx_axis = dx * src_radius / (src_radius + det_radius)
 
     def Vn(u):
-        return (pitch / (2 * np.pi) *
-                (1 + (u / src_radius) ** 2) *
-                (n_pi * np.pi / 2.0 - np.arctan(u / src_radius)))
+        return (pitch / (2 * np.pi)
+                * (1 + (u / src_radius) ** 2)
+                * (n_pi * np.pi / 2.0 - np.arctan(u / src_radius)))
 
     lower_proj_axis = -Vn(dx_axis)
     upper_proj_axis = Vn(-dx_axis)
@@ -234,7 +236,7 @@ def parker_weighting(ray_trafo, q=0.25):
     --------
     fbp_op : Filtered back-projection operator from `RayTransform`
     tam_danielson_window : Indicator function for helical data
-    odl.tomo.geometry.conebeam.FanFlatGeometry : Use case in 2d
+    odl.tomo.geometry.conebeam.FanBeamGeometry : Use case in 2d
     odl.tomo.geometry.conebeam.ConeFlatGeometry : Use case in 3d (for pitch 0)
 
     References
@@ -271,8 +273,8 @@ def parker_weighting(ray_trafo, q=0.25):
         elif rot_dir[1] == 0:
             dx = rot_dir[0] * ray_trafo.range.meshgrid[1]
         else:
-            dx = (rot_dir[0] * ray_trafo.range.meshgrid[1] +
-                  rot_dir[1] * ray_trafo.range.meshgrid[2])
+            dx = (rot_dir[0] * ray_trafo.range.meshgrid[1]
+                  + rot_dir[1] * ray_trafo.range.meshgrid[2])
 
     # Compute parameters
     dx_abs_max = np.max(np.abs(dx))
@@ -285,8 +287,8 @@ def parker_weighting(ray_trafo, q=0.25):
 
     # Define utility functions
     def S(betap):
-        return (0.5 * (1.0 + np.sin(np.pi * betap)) * (np.abs(betap) < 0.5) +
-                (betap >= 0.5))
+        return (0.5 * (1.0 + np.sin(np.pi * betap)) * (np.abs(betap) < 0.5)
+                + (betap >= 0.5))
 
     def b(alpha):
         return q * (2 * delta - 2 * alpha + epsilon)
@@ -322,8 +324,9 @@ def fbp_filter_op(ray_trafo, padding=True, filter_type='Ram-Lak',
 
         `Parallel3dAxisGeometry` : Exact reconstruction
 
-        `FanFlatGeometry` : Approximate reconstruction, correct in limit of
+        `FanBeamGeometry` : Approximate reconstruction, correct in limit of
         fan angle = 0.
+        Only flat detectors are supported (det_curvature_radius is None).
 
         `ConeFlatGeometry`, pitch = 0 (circular) : Approximate reconstruction,
         correct in the limit of fan angle = 0 and cone angle = 0.
@@ -399,9 +402,9 @@ def fbp_filter_op(ray_trafo, padding=True, filter_type='Ram-Lak',
 
         # Add scaling for cone-beam case
         if hasattr(ray_trafo.geometry, 'src_radius'):
-            scale = (ray_trafo.geometry.src_radius /
-                     (ray_trafo.geometry.src_radius +
-                      ray_trafo.geometry.det_radius))
+            scale = (ray_trafo.geometry.src_radius
+                     / (ray_trafo.geometry.src_radius
+                        + ray_trafo.geometry.det_radius))
 
             if ray_trafo.geometry.pitch != 0:
                 # In helical geometry the whole volume is not in each
@@ -488,8 +491,9 @@ def fbp_op(ray_trafo, padding=True, filter_type='Ram-Lak',
 
         `Parallel3dAxisGeometry` : Exact reconstruction
 
-        `FanFlatGeometry` : Approximate reconstruction, correct in limit of fan
+        `FanBeamGeometry` : Approximate reconstruction, correct in limit of fan
         angle = 0.
+        Only flat detectors are supported (det_curvature_radius is None).
 
         `ConeFlatGeometry`, pitch = 0 (circular) : Approximate reconstruction,
         correct in the limit of fan angle = 0 and cone angle = 0.

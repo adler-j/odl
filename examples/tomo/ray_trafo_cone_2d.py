@@ -13,7 +13,7 @@ reco_space = odl.uniform_discr(
 angle_partition = odl.uniform_partition(0, 2 * np.pi, 360)
 # Detector: uniformly sampled, n = 512, min = -30, max = 30
 detector_partition = odl.uniform_partition(-30, 30, 512)
-geometry = odl.tomo.FanFlatGeometry(angle_partition, detector_partition,
+geometry = odl.tomo.FanBeamGeometry(angle_partition, detector_partition,
                                     src_radius=1000, det_radius=100)
 
 # Ray transform (= forward projection).
@@ -31,5 +31,5 @@ backproj = ray_trafo.adjoint(proj_data)
 
 # Shows a slice of the phantom, projections, and reconstruction
 phantom.show(title='Phantom')
-proj_data.show(title='Projection data (sinogram)')
-backproj.show(title='Back-projected data', force_show=True)
+proj_data.show(title='Projection Data (sinogram)')
+backproj.show(title='Back-projection', force_show=True)

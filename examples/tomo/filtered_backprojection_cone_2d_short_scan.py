@@ -29,11 +29,11 @@ angle_partition = odl.uniform_partition(0, np.pi + 0.7, 360)
 # Detector: uniformly sampled, n = 512, min = -40, max = 40
 detector_partition = odl.uniform_partition(-40, 40, 512)
 # Geometry with large fan angle
-geometry = odl.tomo.FanFlatGeometry(
+geometry = odl.tomo.FanBeamGeometry(
     angle_partition, detector_partition, src_radius=80, det_radius=40)
 
 
-# --- Create Filtered Back-Projection (FBP) operator --- #
+# --- Create Filtered Back-projection (FBP) operator --- #
 
 
 # Ray transform (= forward projection). We use the ASTRA CUDA backend.
@@ -65,7 +65,7 @@ pw_fbp_reconstruction = parker_weighted_fbp(proj_data)
 
 # Shows a slice of the phantom, projections, and reconstruction
 phantom.show(title='Phantom')
-proj_data.show(title='Projection data (sinogram)')
-fbp_reconstruction.show(title='Filtered back-projection')
-pw_fbp_reconstruction.show(title='Parker weighted filtered back-projection',
+proj_data.show(title='Projection Data (Sinogram)')
+fbp_reconstruction.show(title='Filtered Back-projection')
+pw_fbp_reconstruction.show(title='Parker-weighted Filtered Back-projection',
                            force_show=True)

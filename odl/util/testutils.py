@@ -1,4 +1,4 @@
-﻿# Copyright 2014-2018 The ODL contributors
+﻿# Copyright 2014-2019 The ODL contributors
 #
 # This file is part of ODL.
 #
@@ -6,27 +6,44 @@
 # v. 2.0. If a copy of the MPL was not distributed with this file, You can
 # obtain one at https://mozilla.org/MPL/2.0/.
 
-"""Utilities for internal use."""
+"""Testing utilities."""
 
-from __future__ import print_function, division, absolute_import
-from builtins import object
+from __future__ import absolute_import, division, print_function
 from future.moves.itertools import zip_longest
-import numpy as np
-import sys
-import os
-import warnings
-from time import time
-from packaging import version
 
-from odl.util.utility import run_from_ipython, is_string
+import os
+import sys
+import warnings
+from builtins import object
+from time import time
+
+import numpy as np
+
+from odl.util.utility import is_string, run_from_ipython
 
 
 __all__ = (
-    'all_equal', 'all_almost_equal', 'dtype_ndigits', 'dtype_tol',
-    'never_skip', 'skip_if_no_pywavelets',
-    'skip_if_no_pyfftw', 'skip_if_no_largescale', 'noise_array',
-    'noise_element', 'noise_elements', 'Timer', 'timeit', 'ProgressBar',
-    'ProgressRange', 'test', 'run_doctests', 'test_file'
+    'dtype_ndigits',
+    'dtype_tol',
+    'all_equal',
+    'all_almost_equal',
+    'is_subdict',
+    'skip_if_no_pyfftw',
+    'skip_if_no_pywavelets',
+    'skip_if_no_largescale',
+    'skip_if_no_benchmark',
+    'simple_fixture',
+    'noise_array',
+    'noise_element',
+    'noise_elements',
+    'FailCounter',
+    'Timer',
+    'timeit',
+    'ProgressBar',
+    'ProgressRange',
+    'test',
+    'run_doctests',
+    'test_file',
 )
 
 
@@ -186,40 +203,37 @@ def is_subdict(subdict, dictionary):
 try:
     # Try catch in case user does not have pytest
     import pytest
+
 except ImportError:
-    def _pass(function):
-        """Trivial decorator used if pytest marks are not available."""
-        return function
 
-    never_skip = _pass
-    skip_if_no_pywavelets = _pass
-    skip_if_no_pyfftw = _pass
-    skip_if_no_largescale = _pass
-    skip_if_no_benchmark = _pass
+    def identity(*args, **kwargs):
+        if args and callable(args[0]):
+            return args[0]
+        else:
+            return identity
+
+    skip_if_no_pyfftw = identity
+    skip_if_no_pywavelets = identity
+    skip_if_no_largescale = identity
+    skip_if_no_benchmark = identity
+
 else:
-    # Used in lists where the elements should all be skipifs
-    never_skip = pytest.mark.skipif(
-        "False",
-        reason='Fill in, never skips'
-    )
-
-    skip_if_no_pywavelets = pytest.mark.skipif(
-        "not odl.trafos.PYWT_AVAILABLE",
-        reason='PyWavelets not available'
-    )
-
+    # Mark decorators for test parameters
     skip_if_no_pyfftw = pytest.mark.skipif(
-        "not odl.trafos.PYFFTW_AVAILABLE",
-        reason='pyFFTW not available')
-
+        'not odl.trafos.PYFFTW_AVAILABLE',
+        reason='pyFFTW not available',
+    )
+    skip_if_no_pywavelets = pytest.mark.skipif(
+        'not odl.trafos.PYWT_AVAILABLE',
+        reason='PyWavelets not available',
+    )
     skip_if_no_largescale = pytest.mark.skipif(
         "not pytest.config.getoption('--largescale')",
-        reason='Need --largescale option to run'
+        reason='--largescale option not given',
     )
-
     skip_if_no_benchmark = pytest.mark.skipif(
         "not pytest.config.getoption('--benchmark')",
-        reason='Need --benchmark option to run'
+        reason='--benchmark option not given',
     )
 
 
@@ -258,8 +272,10 @@ def simple_fixture(name, params, fmt=None):
         ids = []
         for p in params:
             # TODO: other types of decorators?
-            if (isinstance(p, _pytest.mark.MarkDecorator) and
-                    p.name == 'skipif'):
+            if (
+                isinstance(p, _pytest.mark.MarkDecorator)
+                and p.name == 'skipif'
+            ):
                 # Unwrap the wrapped object in the decorator
                 if is_string(p.args[1]):
                     ids.append(fmt_str.format(name=name, value=p.args[1]))
@@ -332,8 +348,10 @@ def noise_array(space):
         elif np.issubdtype(space.dtype, np.floating):
             arr = np.random.randn(*space.shape)
         elif np.issubdtype(space.dtype, np.complexfloating):
-            arr = (np.random.randn(*space.shape) +
-                   1j * np.random.randn(*space.shape)) / np.sqrt(2.0)
+            arr = (
+                np.random.randn(*space.shape)
+                + 1j * np.random.randn(*space.shape)
+            ) / np.sqrt(2.0)
         else:
             raise ValueError('bad dtype {}'.format(space.dtype))
 
@@ -646,16 +664,13 @@ def test(arguments=None):
     try:
         import pytest
     except ImportError:
-        raise ImportError('ODL tests cannot be run without `pytest` installed.'
-                          '\nRun `$ pip install [--user] odl[testing]` in '
-                          'order to install `pytest`.')
-    if version.parse(pytest.__version__) >= version.parse("3.7"):
-        raise RuntimeError('ODL tests cannot be run with `pytest` '
-                           'version `3.7` or higher.\nRun `$ pip install '
-                           '"pytest<3.7"` in order to install '
-                           'a suitable version of `pytest`.')
+        raise ImportError(
+            'ODL tests cannot be run without `pytest` installed.\n'
+            'Run `$ pip install [--user] odl[testing]` in order to install '
+            '`pytest`.'
+        )
 
-    from .pytest_plugins import collect_ignore
+    from .pytest_config import collect_ignore
 
     this_dir = os.path.dirname(__file__)
     odl_root = os.path.abspath(os.path.join(this_dir, os.pardir, os.pardir))

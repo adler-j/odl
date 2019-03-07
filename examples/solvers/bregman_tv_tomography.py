@@ -42,14 +42,13 @@ https://arxiv.org/abs/1505.05191
 """
 
 import odl
-import numpy as np
 
 # Reconstruction space
 reco_space = odl.uniform_discr(min_pt=[-20, -20], max_pt=[20, 20],
                                shape=[128, 128], dtype='float32')
 
 # Make a parallel beam geometry with flat detector, and create ray transform
-geometry = odl.tomo.parallel_beam_geometry(reco_space,  num_angles=100)
+geometry = odl.tomo.parallel_beam_geometry(reco_space, num_angles=100)
 ray_trafo = odl.tomo.RayTransform(reco_space, geometry)
 
 # Create phantom, forward project to create sinograms, and add 10% noise
@@ -94,7 +93,7 @@ p = reco_space.zero()
 
 # This defines the outer Bregman iterations
 for breg_iter in range(niter_bregman):
-    print('Outer Bregman iteration: {}'.format(breg_iter))
+    print('Outer Bregman Iteration: {}'.format(breg_iter))
 
     # Create the affine part of the Bregman functional
     constant = l12_norm(gradient(x))
@@ -112,14 +111,14 @@ for breg_iter in range(niter_bregman):
     p -= (1 / reg_param) * ray_trafo.adjoint(l2_norm.gradient(ray_trafo(x)))
 
     # Display the result after this iteration
-    x.show(title='Outer Bregman iteration {}'.format(breg_iter),
+    x.show(title='Outer Bregman Iteration {}'.format(breg_iter),
            force_show=True)
 
 # Create an FBP-reconstruction to compare with
 fbp_op = odl.tomo.fbp_op(ray_trafo, filter_type='Hann', frequency_scaling=0.4)
 fbp_reco = fbp_op(data)
-fbp_reco.show(title='FBP reconstruction')
+fbp_reco.show(title='FBP Reconstruction')
 
 # Finally, also display phantom and sinograms
 discr_phantom.show(title='Phantom')
-data.show(title='Simulated data (Sinogram)')
+data.show(title='Simulated Data (Sinogram)')
